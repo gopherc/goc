@@ -1,0 +1,6 @@
+[submodule "go"]
+	path = go
+	url = https://github.com/gopherc/go.git
+[submodule "wabt"]
+	path = wabt
+	url = https://github.com/gopherc/wabt.git
