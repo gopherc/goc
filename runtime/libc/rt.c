@@ -157,10 +157,11 @@ IMPL(Z_goZ_syscallZ2EreadFileZ_vi) {
 
 extern void init();
 
-int main(int argc, char *argv[]) {
+int GOC_ENTRY(int argc, char *argv[]) {
     iob[0] = stdin; iob[1] = stdout; iob[2] = stderr;
     srand((unsigned)time(NULL));
     init();
+
     Z_runZ_vii(0, 0);
     while (!has_exit)
         Z_resumeZ_vv();

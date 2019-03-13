@@ -25,7 +25,5 @@ _testmain.go
 
 .DS_Store
 
-output
 debug
-go-bin
 wabt-bin
