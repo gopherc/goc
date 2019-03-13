@@ -47,10 +47,14 @@ func Build() int {
 	tempWASMOutput := filepath.Join(tempPath, "out.wasm")
 	args := []string{
 		"build",
-		"-tags", buildTags,
 		"-o", tempWASMOutput,
-		inputFiles[0],
 	}
+
+	if buildTags != "" {
+		args = append(args, "-tags", buildTags)
+	}
+
+	args = append(args, inputFiles[0])
 
 	logln("Building Go code...")
 	goBin := filepath.Join(goRoot, "bin", "go")
@@ -74,11 +78,13 @@ func Build() int {
 		err = runProgram(cCompiler, "", "/nologo", "/Fe"+outputName, "/I"+bindingsPath,
 			tempCOutput,
 			filepath.Join(bindingsPath, "wasm-rt-impl.c"),
+			filepath.Join(runtimePath, "rt.c"),
 		)
 	} else {
-		err = runProgram(cCompiler, "", "-o", outputName, "-I", bindingsPath,
+		err = runProgram(cCompiler, "", "-std=c99", "-g", "-o", outputName, "-I", bindingsPath, "-I", tempPath,
 			tempCOutput,
 			filepath.Join(bindingsPath, "wasm-rt-impl.c"),
+			filepath.Join(runtimePath, "rt.c"),
 		)
 	}
 
@@ -135,15 +141,17 @@ func About() string {
 }
 
 var (
-	cCompiler  = os.Getenv("CC")
-	goRoot     = filepath.Clean(os.Getenv("GOROOT"))
-	outputName = "out.exe"
+	cCompiler   = os.Getenv("CC")
+	goRoot      = filepath.Clean(os.Getenv("GOROOT"))
+	outputName  = "out.exe"
+	runtimeName = "libc"
 
 	silent,
 	verbose bool
 
 	wabtPath,
 	bindingsPath,
+	runtimePath,
 	buildTags string
 )
 
@@ -170,9 +178,12 @@ func setupFlags() {
 	flag.StringVar(&wabtPath, "wabt", wabtPath, "wabt tools path")
 	flag.StringVar(&goRoot, "goroot", goRoot, "Go compiler path (GOROOT)")
 	flag.StringVar(&outputName, "o", outputName, "final output name")
+	flag.StringVar(&runtimeName, "runtime", runtimeName, "runtime implementation")
 	flag.BoolVar(&silent, "s", silent, "silent mode")
 	flag.BoolVar(&verbose, "v", verbose, "verbose")
 	flag.Parse()
+
+	runtimePath = filepath.Join(bindingsPath, "..", "..", "runtime", runtimeName)
 }
 
 func PrintDefaults() {
