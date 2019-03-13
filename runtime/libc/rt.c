@@ -18,22 +18,32 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+#include <stdint.h>
 
-#include <out.h>
+#include <wasm-rt.h>
 
 #define LOAD(addr, ty) (*(ty*)(Z_mem->data + (addr)))
 #define STORE(addr, ty, v) (*(ty*)(Z_mem->data + (addr)) = (v))
 
 #define IMPL(name) \
-    static void impl_ ## name (u32 sp); \
-    void (*name)(u32) = impl_ ## name; \
-    static void impl_ ## name (u32 sp)
+    static void impl_ ## name (uint32_t sp); \
+    void (*name)(uint32_t) = impl_ ## name; \
+    static void impl_ ## name (uint32_t sp)
 
 #define NOTIMPL(name) IMPL(name) { (void)sp; panic("not implemented: " #name); }
 
 FILE *iob[3] = {0};
-s32 exit_code = 0;
-s32 has_exit = 0;
+int32_t exit_code = 0;
+int32_t has_exit = 0;
+
+/* export: 'run' */
+extern void (*Z_runZ_vii)(uint32_t, uint32_t);
+/* export: 'resume' */
+extern void (*Z_resumeZ_vv)();
+/* export: 'getsp' */
+extern uint32_t (*Z_getspZ_iv)();
+/* export: 'mem' */
+extern wasm_rt_memory_t *Z_mem;
 
 void panic(const char *s) {
     fprintf(stderr, "%s\n", s);
@@ -47,25 +57,26 @@ IMPL(Z_goZ_debugZ_vi) {
 
 /* import: 'go' 'runtime.wasmExit' */
 IMPL(Z_goZ_runtimeZ2EwasmExitZ_vi) {
-    exit_code = LOAD(sp+8, s32);
+    exit_code = LOAD(sp+8, int32_t);
     has_exit = 1;
 }
 
 /* import: 'go' 'runtime.wasmWrite' */
 IMPL(Z_goZ_runtimeZ2EwasmWriteZ_vi) {
-    s64 fd = LOAD(sp+8, s64);
+    int64_t fd = LOAD(sp+8, int64_t);
     if (fd != 1 && fd != 2)
         panic("invalid file descriptor");
 
-	s64 p = LOAD(sp+16, s64);
-	s32 n = LOAD(sp+24, s32);
-    fwrite((void*)p, 1, (size_t)n, iob[fd]);
+	int64_t p = LOAD(sp+16, int64_t);
+	int32_t n = LOAD(sp+24, int32_t);
+    fwrite(&Z_mem->data[p], 1, (size_t)n, iob[fd]);
 }
 
 /* import: 'go' 'runtime.nanotime' */
 IMPL(Z_goZ_runtimeZ2EnanotimeZ_vi) {
-    s64 nanotime = (s64)(clock() / CLOCKS_PER_SEC) * 1000000000;
-    STORE(sp+8, s64, nanotime);
+    int64_t nanotime = (int64_t)(clock() / CLOCKS_PER_SEC) * 1000000000;
+    /* Avoid returning 0 so we add 1. */
+    STORE(sp+8, int64_t, nanotime+1);
 }
 
 /* import: 'go' 'runtime.walltime' */
@@ -79,10 +90,10 @@ NOTIMPL(Z_goZ_runtimeZ2EclearTimeoutEventZ_vi)
 
 /* import: 'go' 'runtime.getRandomData' */
 IMPL(Z_goZ_runtimeZ2EgetRandomDataZ_vi) {
-    s64 start = LOAD(sp+8, s64);
-    s64 len = LOAD(sp+16, s64);
+    int64_t start = LOAD(sp+8, int64_t);
+    int64_t len = LOAD(sp+16, int64_t);
 
-    for (s64 i = 0; i < len; i++)
+    for (int64_t i = 0; i < len; i++)
         Z_mem->data[start+i] = (uint8_t)(rand() % 256);
 }
 
@@ -92,9 +103,9 @@ NOTIMPL(Z_goZ_syscallZ2FjsZ2EstringValZ_vi)
 /* import: 'go' 'syscall/js.valueGet' */
 IMPL(Z_goZ_syscallZ2FjsZ2EvalueGetZ_vi) {
     /* Return nil */
-    const u32 nanHead = 0x7FF80000;
-    STORE(sp+32+4, u32, nanHead);
-    STORE(sp+32, u32, 2);
+    const uint32_t nanHead = 0x7FF80000;
+    STORE(sp+32+4, uint32_t, nanHead);
+    STORE(sp+32, uint32_t, 2);
 }
 
 /* import: 'go' 'syscall/js.valueSet' */
@@ -121,9 +132,11 @@ NOTIMPL(Z_goZ_syscallZ2FjsZ2EvaluePrepareStringZ_vi)
 /* import: 'go' 'syscall/js.valueLoadString' */
 NOTIMPL(Z_goZ_syscallZ2FjsZ2EvalueLoadStringZ_vi)
 
+extern void init();
+
 int main(int argc, char *argv[]) {
     iob[0] = stdin; iob[1] = stdout; iob[2] = stderr;
-    srand(time(NULL));
+    srand((unsigned)time(NULL));
     init();
     Z_runZ_vii(0, 0);
     while (!has_exit)

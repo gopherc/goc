@@ -50,9 +50,10 @@ func Build() int {
 		"-o", tempWASMOutput,
 	}
 
-	if buildTags != "" {
-		args = append(args, "-tags", buildTags)
+	if len(buildTags) > 0 && !strings.HasPrefix(buildTags, " ") {
+		buildTags = " " + buildTags
 	}
+	args = append(args, "-tags", "\"goc"+buildTags+"\"")
 
 	args = append(args, inputFiles[0])
 
