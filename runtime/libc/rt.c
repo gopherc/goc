@@ -139,7 +139,8 @@ NOTIMPL(Z_goZ_syscallZ2FjsZ2EvalueLoadStringZ_vi)
 
 /* import: 'go' 'syscall.writeFile' */
 IMPL(Z_goZ_syscallZ2EwriteFileZ_vi) {
-    STORE(sp+28, int32_t, (int32_t)write(sp));
+    int32_t n = (int32_t)write(sp);
+    STORE(sp+32, int32_t, n);
 }
 
 /* import: 'go' 'syscall.readFile' */
@@ -151,7 +152,7 @@ IMPL(Z_goZ_syscallZ2EreadFileZ_vi) {
 	int64_t p = LOAD(sp+16, int64_t);
 	int32_t n = LOAD(sp+24, int32_t);
     int32_t r = (int32_t)fread(&Z_mem->data[p], 1, (size_t)n, iob[fd]);
-    STORE(sp+28, int32_t, r);
+    STORE(sp+32, int32_t, r);
 }
 
 extern void init();
