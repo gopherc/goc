@@ -50,6 +50,16 @@ void panic(const char *s) {
     exit(-1);
 }
 
+size_t write(int32_t sp) {
+    int64_t fd = LOAD(sp+8, int64_t);
+    if (fd != 1 && fd != 2)
+        panic("invalid file descriptor");
+
+	int64_t p = LOAD(sp+16, int64_t);
+	int32_t n = LOAD(sp+24, int32_t);
+    return fwrite(&Z_mem->data[p], 1, (size_t)n, iob[fd]);
+}
+
 /* import: 'go' 'debug' */
 IMPL(Z_goZ_debugZ_vi) {
     printf("%d\n", sp);
@@ -63,13 +73,7 @@ IMPL(Z_goZ_runtimeZ2EwasmExitZ_vi) {
 
 /* import: 'go' 'runtime.wasmWrite' */
 IMPL(Z_goZ_runtimeZ2EwasmWriteZ_vi) {
-    int64_t fd = LOAD(sp+8, int64_t);
-    if (fd != 1 && fd != 2)
-        panic("invalid file descriptor");
-
-	int64_t p = LOAD(sp+16, int64_t);
-	int32_t n = LOAD(sp+24, int32_t);
-    fwrite(&Z_mem->data[p], 1, (size_t)n, iob[fd]);
+    write(sp);
 }
 
 /* import: 'go' 'runtime.nanotime' */
@@ -103,8 +107,7 @@ NOTIMPL(Z_goZ_syscallZ2FjsZ2EstringValZ_vi)
 /* import: 'go' 'syscall/js.valueGet' */
 IMPL(Z_goZ_syscallZ2FjsZ2EvalueGetZ_vi) {
     /* Return nil */
-    const uint32_t nanHead = 0x7FF80000;
-    STORE(sp+32+4, uint32_t, nanHead);
+    STORE(sp+32+4, uint32_t, 0x7FF80000);
     STORE(sp+32, uint32_t, 2);
 }
 
@@ -131,6 +134,25 @@ NOTIMPL(Z_goZ_syscallZ2FjsZ2EvaluePrepareStringZ_vi)
 
 /* import: 'go' 'syscall/js.valueLoadString' */
 NOTIMPL(Z_goZ_syscallZ2FjsZ2EvalueLoadStringZ_vi)
+
+/* GopherC syscalls */
+
+/* import: 'go' 'syscall.writeFile' */
+IMPL(Z_goZ_syscallZ2EwriteFileZ_vi) {
+    STORE(sp+28, int32_t, (int32_t)write(sp));
+}
+
+/* import: 'go' 'syscall.readFile' */
+IMPL(Z_goZ_syscallZ2EreadFileZ_vi) {
+    int64_t fd = LOAD(sp+8, int64_t);
+    if (fd != 0)
+        panic("invalid file descriptor");
+
+	int64_t p = LOAD(sp+16, int64_t);
+	int32_t n = LOAD(sp+24, int32_t);
+    int32_t r = (int32_t)fread(&Z_mem->data[p], 1, (size_t)n, iob[fd]);
+    STORE(sp+28, int32_t, r);
+}
 
 extern void init();
 
