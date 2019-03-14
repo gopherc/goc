@@ -19,6 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdio.h>
 #include <time.h>
 #include <stdint.h>
+#include <math.h>
 
 #include <wasm-rt.h>
 
@@ -111,6 +112,11 @@ IMPL(Z_goZ_runtimeZ2EgetRandomDataZ_vi) {
 
     for (int64_t i = 0; i < len; i++)
         Z_mem->data[start+i] = (uint8_t)(rand() % 256);
+}
+
+/* import: 'go' 'crypto/rand.getRandomValues' */
+IMPL(Z_goZ_cryptoZ2FrandZ2EgetRandomValuesZ_vi) {
+    Z_goZ_runtimeZ2EgetRandomDataZ_vi(sp);
 }
 
 /* import: 'go' 'syscall/js.stringVal' */
