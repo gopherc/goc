@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -45,9 +46,11 @@ func Build() int {
 
 	if workPath == "" {
 		workPath = os.TempDir()
-		os.MkdirAll(workPath, 0755)
 		defer os.RemoveAll(workPath)
 	}
+
+	workPath, _ = filepath.Abs(workPath)
+	os.MkdirAll(workPath, 0755)
 
 	tempWASMOutput := filepath.Join(workPath, "out.wasm")
 	args := []string{
@@ -60,24 +63,26 @@ func Build() int {
 	}
 	args = append(args, "-tags", "\"goc"+buildTags+"\"")
 
-	args = append(args, inputFiles[0])
+	inputFile, _ := filepath.Abs(inputFiles[0])
+	args = append(args, inputFile)
 
 	logln("Building Go code...")
 	goBin := filepath.Join(goRoot, "bin", "go")
-	if err := runProgram(goBin, filepath.Dir(inputFiles[0]), args...); err != nil {
+	if err := runProgram(goBin, filepath.Dir(inputFile), args...); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return -1
 	}
 
-	logln("Processing WASM...")
-	tempCOutput := filepath.Join(workPath, "out.c")
+	logln("Generating C code...")
+	tempCOutput := "out.c"
 	wasm2cBin := filepath.Join(wabtPath, "wasm2c")
 	if err := runProgram(wasm2cBin, workPath, tempWASMOutput, "-o", tempCOutput); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return -1
 	}
 
-	logln("Compiling C code...")
+	// Give C compiler absolute path.
+	tempCOutput = filepath.Join(workPath, tempCOutput)
 
 	rtCommonPath := filepath.Join(gocRoot, "wabt", "wasm2c")
 	rtImplPath := filepath.Join(rtCommonPath, "wasm-rt-impl.c")
@@ -88,11 +93,12 @@ func Build() int {
 		filepath.Join(runtimePath, "rt.c"),
 	}
 
-	var cArgs []string
+	var cArgs, cTailArgs []string
 	if baseName := strings.ToLower(filepath.Base(cCompiler)); baseName == "cl" || baseName == "cl.exe" {
 		cArgs = []string{"/nologo", "/TP", "/DGOC_ENTRY=" + entryName, "/Fe" + outputName, "/I" + rtCommonPath, "/I", workPath}
 	} else {
 		cArgs = []string{"-std=c99", "-DGOC_ENTRY=" + entryName, "-o", outputName, "-I", rtCommonPath, "-I", workPath}
+		cTailArgs = []string{"-lm"}
 	}
 
 	if cFlags != "" {
@@ -101,7 +107,9 @@ func Build() int {
 		}
 	}
 
-	if err := runProgram(cCompiler, "", append(cArgs, cFiles...)...); err != nil {
+	logln("Compiling C code...")
+	finalArgs := append(append(cArgs, cFiles...), cTailArgs...)
+	if err := runProgram(cCompiler, "", finalArgs...); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return -1
 	}
@@ -146,7 +154,7 @@ func logln(a ...interface{}) {
 }
 
 func logvln(a ...interface{}) {
-	if verbose {
+	if !silent && verbose {
 		fmt.Println(a...)
 	}
 }
@@ -158,7 +166,7 @@ func About() string {
 var (
 	cCompiler   = os.Getenv("CC")
 	gocRoot     = os.Getenv("GOCROOT")
-	outputName  = "out.exe"
+	outputName  = "out"
 	runtimeName = "libc"
 	entryName   = "main"
 
@@ -180,6 +188,10 @@ func setupFlags() {
 			path, _ = filepath.Abs(final)
 		}
 		exePath = filepath.Dir(path)
+	}
+
+	if runtime.GOOS == "windows" {
+		outputName += ".exe"
 	}
 
 	if cCompiler == "" {
@@ -205,11 +217,11 @@ func setupFlags() {
 	}
 
 	if goRoot == "" {
-		goRoot = filepath.Join(gocRoot, "go-bin")
+		goRoot = filepath.Join(gocRoot, "go")
 	}
 
 	if wabtPath == "" {
-		wabtPath = filepath.Join(gocRoot, "wabt-bin")
+		wabtPath = filepath.Join(gocRoot, "wabt", "bin")
 	}
 
 	runtimePath = filepath.Join(gocRoot, "runtime", runtimeName)
