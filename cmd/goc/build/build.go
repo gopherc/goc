@@ -21,6 +21,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -93,24 +94,50 @@ func Build() int {
 		filepath.Join(runtimePath, "rt.c"),
 	}
 
-	var cArgs, cTailArgs []string
-	if baseName := strings.ToLower(filepath.Base(cCompiler)); baseName == "cl" || baseName == "cl.exe" {
-		cArgs = []string{"/nologo", "/TP", "/DGOC_ENTRY=" + entryName, "/Fe" + outputName, "/I" + rtCommonPath, "/I", workPath}
-	} else {
-		cArgs = []string{"-std=c99", "-DGOC_ENTRY=" + entryName, "-o", outputName, "-I", rtCommonPath, "-I", workPath}
-		cTailArgs = []string{"-lm"}
-	}
-
-	if cFlags != "" {
-		for _, a := range strings.Split(cFlags, " ") {
-			cArgs = append(cArgs, a)
+	switch buildmode {
+	case "exe":
+		var cArgs, cTailArgs []string
+		if baseName := strings.ToLower(filepath.Base(cCompiler)); baseName == "cl" || baseName == "cl.exe" {
+			cArgs = []string{"/nologo", "/TP", "/DGOC_ENTRY=" + entryName, "/Fe" + outputName, "/I" + rtCommonPath, "/I", workPath}
+		} else {
+			cArgs = []string{"-std=c99", "-DGOC_ENTRY=" + entryName, "-o", outputName, "-I", rtCommonPath, "-I", workPath}
+			cTailArgs = []string{"-lm"}
 		}
-	}
 
-	logln("Compiling C code...")
-	finalArgs := append(append(cArgs, cFiles...), cTailArgs...)
-	if err := runProgram(cCompiler, "", finalArgs...); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		if cFlags != "" {
+			for _, a := range strings.Split(cFlags, " ") {
+				cArgs = append(cArgs, a)
+			}
+		}
+
+		logln("Compiling C code...")
+		finalArgs := append(append(cArgs, cFiles...), cTailArgs...)
+		if err := runProgram(cCompiler, "", finalArgs...); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return -1
+		}
+	case "c-source":
+		if err := os.MkdirAll(outputName, 0755); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return -1
+		}
+
+		if err := copyFiles(outputName, workPath, "*.c *.h"); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return -1
+		}
+
+		if err := copyFiles(outputName, runtimePath, "*.c *.h"); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return -1
+		}
+
+		if err := copyFiles(outputName, rtCommonPath, "*.c *.h"); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return -1
+		}
+	default:
+		fmt.Fprintln(os.Stderr, "invalid buildmode:", buildmode)
 		return -1
 	}
 
@@ -147,6 +174,40 @@ func runProgram(prog, cwd string, args ...string) error {
 	return nil
 }
 
+func copyFiles(destPath, path, globs string) error {
+	for _, glob := range strings.Split(globs, " ") {
+		glob := path + "/" + glob
+		logvln("copyFiles:", glob, destPath)
+
+		files, err := filepath.Glob(glob)
+		if err != nil {
+			return err
+		}
+
+		for _, file := range files {
+			dest := filepath.Join(destPath, filepath.Base(file))
+			logvln(file, "->", dest)
+
+			srcFile, err := os.Open(file)
+			if err != nil {
+				return err
+			}
+			defer srcFile.Close()
+
+			destFile, err := os.Create(dest)
+			if err != nil {
+				return err
+			}
+			defer destFile.Close()
+
+			if _, err = io.Copy(destFile, srcFile); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func logln(a ...interface{}) {
 	if !silent {
 		fmt.Println(a...)
@@ -169,6 +230,7 @@ var (
 	outputName  = "out"
 	runtimeName = "libc"
 	entryName   = "main"
+	buildmode   = "exe"
 
 	silent,
 	verbose bool
@@ -208,6 +270,7 @@ func setupFlags() {
 	flag.StringVar(&entryName, "entry", entryName, "name of C entry point")
 	flag.StringVar(&workPath, "work", workPath, "specify temporary work path")
 	flag.StringVar(&cFlags, "cflags", cFlags, "extra parameters for the C compiler")
+	flag.StringVar(&buildmode, "buildmode", buildmode, "set compiler buildmode, 'exe' or 'c-source'")
 	flag.BoolVar(&silent, "s", silent, "silent mode")
 	flag.BoolVar(&verbose, "v", verbose, "verbose")
 	flag.Parse()
