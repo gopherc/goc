@@ -19,13 +19,8 @@ package main
 
 import (
 	"fmt"
-	"time"
 )
 
 func main() {
-	fmt.Println("start")
-
-	t := time.Now()
-	fmt.Println("next")
-	fmt.Println("Hello World!", t)
+	fmt.Println("Hello World!")
 }

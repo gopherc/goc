@@ -122,42 +122,6 @@ IMPL(Z_goZ_cryptoZ2FrandZ2EgetRandomValuesZ_vi) {
     Z_goZ_runtimeZ2EgetRandomDataZ_vi(sp);
 }
 
-/* import: 'go' 'syscall/js.stringVal' */
-NOTIMPL(Z_goZ_syscallZ2FjsZ2EstringValZ_vi)
-
-/* import: 'go' 'syscall/js.valueGet' */
-IMPL(Z_goZ_syscallZ2FjsZ2EvalueGetZ_vi) {
-    /* Return nil */
-    STORE(sp+32+4, uint32_t, 0x7FF80000);
-    STORE(sp+32, uint32_t, 2);
-}
-
-/* import: 'go' 'syscall/js.valueSet' */
-NOTIMPL(Z_goZ_syscallZ2FjsZ2EvalueSetZ_vi)
-
-/* import: 'go' 'syscall/js.valueIndex' */
-NOTIMPL(Z_goZ_syscallZ2FjsZ2EvalueIndexZ_vi)
-
-/* import: 'go' 'syscall/js.valueSetIndex' */
-NOTIMPL(Z_goZ_syscallZ2FjsZ2EvalueSetIndexZ_vi)
-
-/* import: 'go' 'syscall/js.valueCall' */
-NOTIMPL(Z_goZ_syscallZ2FjsZ2EvalueCallZ_vi)
-
-/* import: 'go' 'syscall/js.valueNew' */
-NOTIMPL(Z_goZ_syscallZ2FjsZ2EvalueNewZ_vi)
-
-/* import: 'go' 'syscall/js.valueLength' */
-NOTIMPL(Z_goZ_syscallZ2FjsZ2EvalueLengthZ_vi)
-
-/* import: 'go' 'syscall/js.valuePrepareString' */
-NOTIMPL(Z_goZ_syscallZ2FjsZ2EvaluePrepareStringZ_vi)
-
-/* import: 'go' 'syscall/js.valueLoadString' */
-NOTIMPL(Z_goZ_syscallZ2FjsZ2EvalueLoadStringZ_vi)
-
-/* GopherC syscalls */
-
 /* import: 'go' 'syscall.writeFile' */
 IMPL(Z_goZ_syscallZ2EwriteFileZ_vi) {
     int32_t n = (int32_t)write(sp);
