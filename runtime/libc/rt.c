@@ -20,8 +20,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <time.h>
 #include <stdint.h>
 #include <math.h>
+#include <string.h>
 
 #include <wasm-rt.h>
+
+#define MAX_ARGC 256
 
 #define LOAD(addr, ty) (*(ty*)(Z_mem->data + (addr)))
 #define STORE(addr, ty, v) (*(ty*)(Z_mem->data + (addr)) = (v))
@@ -173,14 +176,46 @@ IMPL(Z_goZ_syscallZ2EreadFileZ_vi) {
     STORE(sp+32, int32_t, r);
 }
 
+int write_string(int *offset, const char *str) {
+    int p = *offset;
+    int ln = strlen(str);
+    memcpy(&Z_mem->data[*offset], str, ln+1);
+    *offset += ln + (8 - (ln % 8));
+    return p;
+}
+
 extern void init();
 
+int pointerOffsets[MAX_ARGC] = {0};
+
 int GOC_ENTRY(int argc, char *argv[]) {
+    if (argc > MAX_ARGC) {
+        argc = MAX_ARGC;
+    }
+
     iob[0] = stdin; iob[1] = stdout; iob[2] = stderr;
     srand((unsigned)time(NULL));
     init();
 
-    Z_runZ_vii(0, 0);
+    /* Pass command line arguments and environment variables by writing them to the linear memory. */
+	int offset = 4096;
+    int nPtr = 0;
+    for (int i = 0; i < argc; i++)
+        pointerOffsets[nPtr++] = write_string(&offset, argv[i]);
+
+    /* Num env */
+    pointerOffsets[nPtr++] = 0;
+
+    /* Should push environment variables here. */
+    
+    uint32_t argvOffset = (uint32_t)offset;
+    for (int i = 0; i < nPtr; i++) {
+        STORE(offset, uint32_t, pointerOffsets[i]);
+        STORE(offset+4, uint32_t, 0);
+        offset += 8;
+    }
+
+    Z_runZ_vii((uint32_t)argc, argvOffset);
     while (!has_exit)
         Z_resumeZ_vv();
     return exit_code;
