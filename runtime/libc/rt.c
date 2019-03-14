@@ -84,7 +84,19 @@ IMPL(Z_goZ_runtimeZ2EnanotimeZ_vi) {
 }
 
 /* import: 'go' 'runtime.walltime' */
-NOTIMPL(Z_goZ_runtimeZ2EwalltimeZ_vi)
+IMPL(Z_goZ_runtimeZ2EwalltimeZ_vi) {
+    struct tm y2k = {0};
+    y2k.tm_year = 70; y2k.tm_mday = 1;
+
+    time_t timer;
+    time(&timer);
+
+    double seconds = difftime(timer, mktime(&y2k));
+    STORE(sp+8, int64_t, (int64_t)seconds);
+
+    double ipart;
+    STORE(sp+16, int32_t, (int32_t)(modf(seconds, &ipart) * 1000000000));
+}
 
 /* import: 'go' 'runtime.scheduleTimeoutEvent' */
 NOTIMPL(Z_goZ_runtimeZ2EscheduleTimeoutEventZ_vi)

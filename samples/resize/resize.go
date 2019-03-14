@@ -18,17 +18,21 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 package main
 
 import (
-	"fmt"
 	"image"
+	"image/png"
+	"os"
 
 	"github.com/nfnt/resize"
 )
 
 func main() {
-	src := image.NewRGBA(image.Rect(0, 0, 1920, 1080))
+	src, err := png.Decode(os.Stdin)
+	if err != nil {
+		panic(err)
+	}
 
-	const size = 4096
-	res := resize.Resize(size, size, src, resize.Lanczos3)
-
-	fmt.Println("Done!", res)
+	res := resize.Resize(1920, 1080, src, resize.Lanczos3).(*image.RGBA)
+	if err := png.Encode(os.Stdout, res); err != nil {
+		panic(err)
+	}
 }
