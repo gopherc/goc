@@ -27,3 +27,4 @@ _testmain.go
 
 debug
 cmd/goc/goc
+gopherc*.*-*.zip

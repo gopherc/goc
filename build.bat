@@ -1,11 +1,12 @@
 @echo off
-set BUILD_DIR=%~dp
 
 if "%GOPHERC_VERSION%"=="" (
     echo WARNING: No GOPHERC_VERSION variable!
     set GOPHERC_VERSION=0.0.1
 )
 echo GopherC version: %GOPHERC_VERSION%
+
+set BUILD_DIR=%~dp
 
 echo [Building Go]
 
@@ -49,4 +50,4 @@ cd ..
 rd /S /Q build
 cd ..
 
-echo [Done!]
+echo [Done]
