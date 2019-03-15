@@ -147,6 +147,9 @@ IMPL(Z_goZ_syscallZ2EreadFileZ_vi) {
     STORE(sp+32, int32_t, r);
 }
 
+NOTIMPL(Z_goZ_syscallZ2EcloseFileZ_vi)
+NOTIMPL(Z_goZ_syscallZ2EopenFileZ_vi)
+
 int write_string(int *offset, const char *str) {
     int p = *offset;
     int ln = strlen(str);
