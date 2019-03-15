@@ -103,10 +103,17 @@ IMPL(Z_goZ_runtimeZ2EwalltimeZ_vi) {
 }
 
 /* import: 'go' 'runtime.scheduleTimeoutEvent' */
-NOTIMPL(Z_goZ_runtimeZ2EscheduleTimeoutEventZ_vi)
+IMPL(Z_goZ_runtimeZ2EscheduleTimeoutEventZ_vi) {
+    int64_t t = LOAD(sp+8, int64_t);
+    (void)t;
+    STORE(sp+16, int32_t, 0 /* id */);
+}
 
 /* import: 'go' 'runtime.clearTimeoutEvent' */
-NOTIMPL(Z_goZ_runtimeZ2EclearTimeoutEventZ_vi)
+IMPL(Z_goZ_runtimeZ2EclearTimeoutEventZ_vi) {
+    int32_t id = LOAD(sp+8, int32_t);
+    (void)id;
+}
 
 /* import: 'go' 'runtime.getRandomData' */
 IMPL(Z_goZ_runtimeZ2EgetRandomDataZ_vi) {
