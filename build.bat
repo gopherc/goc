@@ -1,5 +1,11 @@
 @echo off
-set BUILD_DIR=%~dp0
+set BUILD_DIR=%~dp
+
+if "%GOPHERC_VERSION%"=="" (
+    echo WARNING: No GOPHERC_VERSION variable!
+    set GOPHERC_VERSION=0.0.1
+)
+echo GopherC version: %GOPHERC_VERSION%
 
 echo [Building Go]
 
@@ -19,6 +25,9 @@ echo [Building GopherC]
 
 cd cmd/goc
 if exist goc.exe del /Q /F goc.exe
+
+echo package version > version\version.go
+echo var Version = %GOPHERC_VERSION% >> version\version.go
 
 set GOROOT=%BUILD_DIR%\go
 %GOROOT%\bin\go build goc.go
