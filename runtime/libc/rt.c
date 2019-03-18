@@ -1,6 +1,7 @@
 // Copyright (c) 2016-2019, Andreas T Jonsson
 // All rights reserved.
 
+#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
@@ -11,6 +12,7 @@
 #include <wasm-rt.h>
 
 #define MAX_ARGC 256
+#define MAX_FILES 256
 
 #define LOAD(addr, ty) (*(ty*)(Z_mem->data + (addr)))
 #define STORE(addr, ty, v) (*(ty*)(Z_mem->data + (addr)) = (v))
@@ -22,7 +24,10 @@
 
 #define NOTIMPL(name) IMPL(name) { (void)sp; panic("not implemented: " #name); }
 
-FILE *iob[3] = {0};
+int descriptor_free_index = 3;
+int descriptor_free_list[MAX_FILES] = {0};
+FILE *descriptors[MAX_FILES] = {0};
+
 int32_t exit_code = 0;
 int32_t has_exit = 0;
 
@@ -42,12 +47,9 @@ void panic(const char *s) {
 
 size_t write(int32_t sp) {
     int64_t fd = LOAD(sp+8, int64_t);
-    if (fd != 1 && fd != 2)
-        panic("invalid file descriptor");
-
 	int64_t p = LOAD(sp+16, int64_t);
 	int32_t n = LOAD(sp+24, int32_t);
-    return fwrite(&Z_mem->data[p], 1, (size_t)n, iob[fd]);
+    return fwrite(&Z_mem->data[p], 1, (size_t)n, descriptors[fd]);
 }
 
 /* import: 'go' 'debug' */
@@ -124,17 +126,35 @@ IMPL(Z_goZ_syscallZ2EwriteFileZ_vi) {
 /* import: 'go' 'syscall.readFile' */
 IMPL(Z_goZ_syscallZ2EreadFileZ_vi) {
     int64_t fd = LOAD(sp+8, int64_t);
-    if (fd != 0)
-        panic("invalid file descriptor");
-
 	int64_t p = LOAD(sp+16, int64_t);
 	int32_t n = LOAD(sp+24, int32_t);
-    int32_t r = (int32_t)fread(&Z_mem->data[p], 1, (size_t)n, iob[fd]);
+    int32_t r = (int32_t)fread(&Z_mem->data[p], 1, (size_t)n, descriptors[fd]);
     STORE(sp+32, int32_t, r);
 }
 
-NOTIMPL(Z_goZ_syscallZ2EcloseFileZ_vi)
-NOTIMPL(Z_goZ_syscallZ2EopenFileZ_vi)
+IMPL(Z_goZ_syscallZ2EcloseFileZ_vi) {
+    int64_t addr = LOAD(sp, int64_t);
+    STORE(sp+8, int32_t, 0);
+}
+
+IMPL(Z_goZ_syscallZ2EopenFileZ_vi) {
+    int64_t addr = LOAD(sp+8, int64_t);
+    int64_t len = LOAD(sp+16, int64_t);
+    uint8_t *ptr = &Z_mem->data[addr];
+
+    int32_t mode = LOAD(sp+20, int32_t);
+    int32_t perm = LOAD(sp+24, int32_t);
+
+    char *tmp = malloc((size_t)len+1);
+    memcpy(tmp, (void*)ptr, len);
+    tmp[len] = 0;
+
+    //TODO: Fix mode! /aj
+    FILE *fp = fopen(tmp, "wb");
+    free(tmp);
+
+    STORE(sp+32, int64_t, (int64_t)fp);
+}
 
 int write_string(int *offset, const char *str) {
     int p = *offset;
@@ -142,6 +162,21 @@ int write_string(int *offset, const char *str) {
     memcpy(&Z_mem->data[*offset], str, ln+1);
     *offset += ln + (8 - (ln % 8));
     return p;
+}
+
+int alloc_fd() {
+    if (descriptor_free_index == MAX_FILES - 1) {
+        return -1;
+    }
+    return descriptor_free_list[descriptor_free_index++];
+}
+
+void free_fd(int fd) {
+    if (!descriptors[fd])
+        return;
+    
+    descriptors[fd] = NULL;
+    descriptor_free_list[--descriptor_free_index] = fd;
 }
 
 extern void init();
@@ -153,7 +188,14 @@ int GOC_ENTRY(int argc, char *argv[]) {
         argc = MAX_ARGC;
     }
 
-    iob[0] = stdin; iob[1] = stdout; iob[2] = stderr;
+    descriptors[0] = stdin;
+    descriptors[1] = stdout;
+    descriptors[2] = stderr;
+
+    for (int i = 0; i < MAX_FILES; i++) {
+        descriptor_free_list[i] = i;
+    }
+
     srand((unsigned)time(NULL));
     init();
 
