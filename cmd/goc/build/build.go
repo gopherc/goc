@@ -211,12 +211,11 @@ func About() string {
 }
 
 var (
-	cCompiler   = os.Getenv("CC")
-	gocRoot     = os.Getenv("GOCROOT")
-	outputName  = "out"
-	runtimeName = "libc"
-	entryName   = "main"
-	buildmode   = "exe"
+	cCompiler  = os.Getenv("CC")
+	gocRoot    = os.Getenv("GOCROOT")
+	outputName = "out"
+	entryName  = "main"
+	buildmode  = "exe"
 
 	silent,
 	verbose bool
@@ -252,7 +251,6 @@ func setupFlags() {
 	flag.StringVar(&goRoot, "goroot", goRoot, "Go compiler path")
 	flag.StringVar(&gocRoot, "gocroot", gocRoot, "GopherC compiler path (GOCROOT)")
 	flag.StringVar(&outputName, "o", outputName, "final output name")
-	flag.StringVar(&runtimeName, "runtime", runtimeName, "runtime implementation")
 	flag.StringVar(&entryName, "entry", entryName, "name of C entry point")
 	flag.StringVar(&workPath, "work", workPath, "specify temporary work path")
 	flag.StringVar(&cFlags, "cflags", cFlags, "extra parameters for the C compiler")
@@ -273,7 +271,7 @@ func setupFlags() {
 		wabtPath = filepath.Join(gocRoot, "wabt", "bin")
 	}
 
-	runtimePath = filepath.Join(gocRoot, "runtime", runtimeName)
+	runtimePath = filepath.Join(gocRoot, "runtime")
 }
 
 func PrintDefaults() {

@@ -54,11 +54,19 @@ static void panic(const char *s) {
     exit(-1);
 }
 
-static size_t write(int32_t sp) {
+static int32_t write(int32_t sp) {
     int64_t fd = LOAD(sp+8, int64_t);
 	int64_t p = LOAD(sp+16, int64_t);
 	int32_t n = LOAD(sp+24, int32_t);
-    return fwrite(&Z_mem->data[p], 1, (size_t)n, descriptors[fd]);
+
+    if (fd < 0 || fd >= MAX_FILES)
+        return -1;
+
+    FILE *fp = descriptors[fd];
+    if (!fp)
+        return -1;
+    
+    return (int32_t)fwrite(&Z_mem->data[p], 1, (size_t)n, fp);
 }
 
 /* import: 'go' 'debug' */
@@ -79,7 +87,7 @@ IMPL(Z_goZ_runtimeZ2EwasmWriteZ_vi) {
 
 /* import: 'go' 'runtime.nanotime' */
 IMPL(Z_goZ_runtimeZ2EnanotimeZ_vi) {
-    int64_t nanotime = (int64_t)(clock() / CLOCKS_PER_SEC) * 1000000000;
+    int64_t nanotime = (int64_t)(((double)clock() / CLOCKS_PER_SEC) * 1000000000);
     /* Avoid returning 0 so we add 1. */
     STORE(sp+8, int64_t, nanotime+1);
 }
@@ -103,7 +111,9 @@ IMPL(Z_goZ_runtimeZ2EwalltimeZ_vi) {
 IMPL(Z_goZ_runtimeZ2EscheduleTimeoutEventZ_vi) {
     int64_t t = LOAD(sp+8, int64_t);
     (void)t;
-    STORE(sp+16, int32_t, 0 /* id */);
+
+    static int32_t time_id_counter = 0;
+    STORE(sp+16, int32_t, time_id_counter++);
 }
 
 /* import: 'go' 'runtime.clearTimeoutEvent' */
@@ -137,8 +147,25 @@ IMPL(Z_goZ_syscallZ2EreadFileZ_vi) {
     int64_t fd = LOAD(sp+8, int64_t);
 	int64_t p = LOAD(sp+16, int64_t);
 	int32_t n = LOAD(sp+24, int32_t);
-    int32_t r = (int32_t)fread(&Z_mem->data[p], 1, (size_t)n, descriptors[fd]);
+
+    if (fd < 0 || fd >= MAX_FILES)
+        goto error;
+
+    FILE *fp = descriptors[fd];
+    if (!fp)
+        goto error;
+
+    if (feof(fp) != 0) {
+        STORE(sp+46, int32_t, 0);
+        return;
+    }
+
+    int32_t r = (int32_t)fread(&Z_mem->data[p], 1, (size_t)n, fp);
     STORE(sp+32, int32_t, r);
+    return;
+
+error:
+    STORE(sp+32, int32_t, -1);
 }
 
 IMPL(Z_goZ_syscallZ2EcloseFileZ_vi) {
