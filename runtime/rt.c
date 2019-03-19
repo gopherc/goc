@@ -1,6 +1,7 @@
 // Copyright (c) 2016-2019, Andreas T Jonsson
 // All rights reserved.
 
+#include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
@@ -11,6 +12,7 @@
 #include <wasm-rt.h>
 
 #define MAX_ARGC 256
+#define MAX_FILES 256
 
 #define LOAD(addr, ty) (*(ty*)(Z_mem->data + (addr)))
 #define STORE(addr, ty, v) (*(ty*)(Z_mem->data + (addr)) = (v))
@@ -22,7 +24,19 @@
 
 #define NOTIMPL(name) IMPL(name) { (void)sp; panic("not implemented: " #name); }
 
-FILE *iob[3] = {0};
+enum {
+    O_RDONLY = 0x0,
+    O_WRONLY = 0x1,
+    O_RDWR   = 0x2,
+    O_CREAT  = 0x40,
+    O_TRUNC  = 0x200,
+    O_APPEND = 0x400,
+};
+
+int descriptor_free_index = 3;
+int descriptor_free_list[MAX_FILES] = {0};
+FILE *descriptors[MAX_FILES] = {0};
+
 int32_t exit_code = 0;
 int32_t has_exit = 0;
 
@@ -35,19 +49,24 @@ extern uint32_t (*Z_getspZ_iv)();
 /* export: 'mem' */
 extern wasm_rt_memory_t *Z_mem;
 
-void panic(const char *s) {
+static void panic(const char *s) {
     fprintf(stderr, "%s\n", s);
     exit(-1);
 }
 
-size_t write(int32_t sp) {
+static int32_t write(int32_t sp) {
     int64_t fd = LOAD(sp+8, int64_t);
-    if (fd != 1 && fd != 2)
-        panic("invalid file descriptor");
-
 	int64_t p = LOAD(sp+16, int64_t);
 	int32_t n = LOAD(sp+24, int32_t);
-    return fwrite(&Z_mem->data[p], 1, (size_t)n, iob[fd]);
+
+    if (fd < 0 || fd >= MAX_FILES)
+        return -1;
+
+    FILE *fp = descriptors[fd];
+    if (!fp)
+        return -1;
+    
+    return (int32_t)fwrite(&Z_mem->data[p], 1, (size_t)n, fp);
 }
 
 /* import: 'go' 'debug' */
@@ -68,7 +87,7 @@ IMPL(Z_goZ_runtimeZ2EwasmWriteZ_vi) {
 
 /* import: 'go' 'runtime.nanotime' */
 IMPL(Z_goZ_runtimeZ2EnanotimeZ_vi) {
-    int64_t nanotime = (int64_t)(clock() / CLOCKS_PER_SEC) * 1000000000;
+    int64_t nanotime = (int64_t)(((double)clock() / CLOCKS_PER_SEC) * 1000000000);
     /* Avoid returning 0 so we add 1. */
     STORE(sp+8, int64_t, nanotime+1);
 }
@@ -92,7 +111,9 @@ IMPL(Z_goZ_runtimeZ2EwalltimeZ_vi) {
 IMPL(Z_goZ_runtimeZ2EscheduleTimeoutEventZ_vi) {
     int64_t t = LOAD(sp+8, int64_t);
     (void)t;
-    STORE(sp+16, int32_t, 0 /* id */);
+
+    static int32_t time_id_counter = 0;
+    STORE(sp+16, int32_t, time_id_counter++);
 }
 
 /* import: 'go' 'runtime.clearTimeoutEvent' */
@@ -124,19 +145,94 @@ IMPL(Z_goZ_syscallZ2EwriteFileZ_vi) {
 /* import: 'go' 'syscall.readFile' */
 IMPL(Z_goZ_syscallZ2EreadFileZ_vi) {
     int64_t fd = LOAD(sp+8, int64_t);
-    if (fd != 0)
-        panic("invalid file descriptor");
-
 	int64_t p = LOAD(sp+16, int64_t);
 	int32_t n = LOAD(sp+24, int32_t);
-    int32_t r = (int32_t)fread(&Z_mem->data[p], 1, (size_t)n, iob[fd]);
+
+    if (fd < 0 || fd >= MAX_FILES)
+        goto error;
+
+    FILE *fp = descriptors[fd];
+    if (!fp)
+        goto error;
+
+    if (feof(fp) != 0) {
+        STORE(sp+46, int32_t, 0);
+        return;
+    }
+
+    int32_t r = (int32_t)fread(&Z_mem->data[p], 1, (size_t)n, fp);
     STORE(sp+32, int32_t, r);
+    return;
+
+error:
+    STORE(sp+32, int32_t, -1);
 }
 
-NOTIMPL(Z_goZ_syscallZ2EcloseFileZ_vi)
-NOTIMPL(Z_goZ_syscallZ2EopenFileZ_vi)
+IMPL(Z_goZ_syscallZ2EcloseFileZ_vi) {
+    int64_t fd = LOAD(sp+8, int64_t);
+    if (fd < 3 || fd >= MAX_FILES || !descriptors[fd]) {
+        STORE(sp+8, int32_t, -1);
+        return;
+    }
 
-int write_string(int *offset, const char *str) {
+    fclose(descriptors[fd]);
+    descriptors[fd] = NULL;
+    descriptor_free_list[--descriptor_free_index] = fd;
+    STORE(sp+8, int32_t, 0);
+}
+
+IMPL(Z_goZ_syscallZ2EopenFileZ_vi) {
+    int64_t addr = LOAD(sp+8, int64_t);
+    int64_t len = LOAD(sp+16, int64_t);
+    uint8_t *ptr = &Z_mem->data[addr];
+
+    int32_t mode = LOAD(sp+20, int32_t);
+    int32_t perm = LOAD(sp+24, int32_t);
+
+    char *tmp = malloc((size_t)len+1);
+    memcpy(tmp, (void*)ptr, len);
+    tmp[len] = 0;
+
+    const char *access = NULL;
+    switch (perm) {
+    case O_RDONLY:
+        access = "rb";
+        break;
+    case O_WRONLY | O_CREAT | O_TRUNC:
+        access = "wb";
+        break;
+    case O_WRONLY | O_CREAT | O_APPEND:
+        access = "ab";
+        break;
+    case O_RDWR:
+        access = "rb+";
+        break;
+    case O_RDWR | O_CREAT | O_TRUNC:
+        access = "wb+";
+        break;
+    case O_RDWR | O_CREAT | O_APPEND:
+        access = "ab+";
+        break;
+    default:
+        goto error;
+    }
+
+    FILE *fp = fopen(tmp, access);
+    free(tmp);
+
+    if (fp == 0 || descriptor_free_index == MAX_FILES - 1)
+        goto error;
+
+    int fd = descriptor_free_list[descriptor_free_index++];
+    descriptors[fd] = fp;
+    STORE(sp+32, int64_t, (int64_t)fd);
+    return;
+
+error:
+    STORE(sp+32, int64_t, (int64_t)-1);
+}
+
+static int write_string(int *offset, const char *str) {
     int p = *offset;
     int ln = strlen(str);
     memcpy(&Z_mem->data[*offset], str, ln+1);
@@ -149,11 +245,16 @@ extern void init();
 int pointerOffsets[MAX_ARGC] = {0};
 
 int GOC_ENTRY(int argc, char *argv[]) {
-    if (argc > MAX_ARGC) {
+    if (argc > MAX_ARGC)
         argc = MAX_ARGC;
-    }
 
-    iob[0] = stdin; iob[1] = stdout; iob[2] = stderr;
+    descriptors[0] = stdin;
+    descriptors[1] = stdout;
+    descriptors[2] = stderr;
+
+    for (int i = 0; i < MAX_FILES; i++)
+        descriptor_free_list[i] = i;
+
     srand((unsigned)time(NULL));
     init();
 
