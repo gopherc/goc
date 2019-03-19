@@ -24,6 +24,15 @@
 
 #define NOTIMPL(name) IMPL(name) { (void)sp; panic("not implemented: " #name); }
 
+enum {
+    O_RDONLY = 0x0,
+    O_WRONLY = 0x1,
+    O_RDWR   = 0x2,
+    O_CREAT  = 0x40,
+    O_TRUNC  = 0x200,
+    O_APPEND = 0x400,
+};
+
 int descriptor_free_index = 3;
 int descriptor_free_list[MAX_FILES] = {0};
 FILE *descriptors[MAX_FILES] = {0};
@@ -40,12 +49,12 @@ extern uint32_t (*Z_getspZ_iv)();
 /* export: 'mem' */
 extern wasm_rt_memory_t *Z_mem;
 
-void panic(const char *s) {
+static void panic(const char *s) {
     fprintf(stderr, "%s\n", s);
     exit(-1);
 }
 
-size_t write(int32_t sp) {
+static size_t write(int32_t sp) {
     int64_t fd = LOAD(sp+8, int64_t);
 	int64_t p = LOAD(sp+16, int64_t);
 	int32_t n = LOAD(sp+24, int32_t);
@@ -133,7 +142,15 @@ IMPL(Z_goZ_syscallZ2EreadFileZ_vi) {
 }
 
 IMPL(Z_goZ_syscallZ2EcloseFileZ_vi) {
-    int64_t addr = LOAD(sp, int64_t);
+    int64_t fd = LOAD(sp+8, int64_t);
+    if (fd < 3 || fd >= MAX_FILES || !descriptors[fd]) {
+        STORE(sp+8, int32_t, -1);
+        return;
+    }
+
+    fclose(descriptors[fd]);
+    descriptors[fd] = NULL;
+    descriptor_free_list[--descriptor_free_index] = fd;
     STORE(sp+8, int32_t, 0);
 }
 
@@ -149,14 +166,46 @@ IMPL(Z_goZ_syscallZ2EopenFileZ_vi) {
     memcpy(tmp, (void*)ptr, len);
     tmp[len] = 0;
 
-    //TODO: Fix mode! /aj
-    FILE *fp = fopen(tmp, "wb");
+    const char *access = NULL;
+    switch (perm) {
+    case O_RDONLY:
+        access = "rb";
+        break;
+    case O_WRONLY | O_CREAT | O_TRUNC:
+        access = "wb";
+        break;
+    case O_WRONLY | O_CREAT | O_APPEND:
+        access = "ab";
+        break;
+    case O_RDWR:
+        access = "rb+";
+        break;
+    case O_RDWR | O_CREAT | O_TRUNC:
+        access = "wb+";
+        break;
+    case O_RDWR | O_CREAT | O_APPEND:
+        access = "ab+";
+        break;
+    default:
+        goto error;
+    }
+
+    FILE *fp = fopen(tmp, access);
     free(tmp);
 
-    STORE(sp+32, int64_t, (int64_t)fp);
+    if (fp == 0 || descriptor_free_index == MAX_FILES - 1)
+        goto error;
+
+    int fd = descriptor_free_list[descriptor_free_index++];
+    descriptors[fd] = fp;
+    STORE(sp+32, int64_t, (int64_t)fd);
+    return;
+
+error:
+    STORE(sp+32, int64_t, (int64_t)-1);
 }
 
-int write_string(int *offset, const char *str) {
+static int write_string(int *offset, const char *str) {
     int p = *offset;
     int ln = strlen(str);
     memcpy(&Z_mem->data[*offset], str, ln+1);
@@ -164,37 +213,20 @@ int write_string(int *offset, const char *str) {
     return p;
 }
 
-int alloc_fd() {
-    if (descriptor_free_index == MAX_FILES - 1) {
-        return -1;
-    }
-    return descriptor_free_list[descriptor_free_index++];
-}
-
-void free_fd(int fd) {
-    if (!descriptors[fd])
-        return;
-    
-    descriptors[fd] = NULL;
-    descriptor_free_list[--descriptor_free_index] = fd;
-}
-
 extern void init();
 
 int pointerOffsets[MAX_ARGC] = {0};
 
 int GOC_ENTRY(int argc, char *argv[]) {
-    if (argc > MAX_ARGC) {
+    if (argc > MAX_ARGC)
         argc = MAX_ARGC;
-    }
 
     descriptors[0] = stdin;
     descriptors[1] = stdout;
     descriptors[2] = stderr;
 
-    for (int i = 0; i < MAX_FILES; i++) {
+    for (int i = 0; i < MAX_FILES; i++)
         descriptor_free_list[i] = i;
-    }
 
     srand((unsigned)time(NULL));
     init();
