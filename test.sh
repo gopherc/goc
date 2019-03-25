@@ -1,5 +1,5 @@
 #!/bin/sh
 
-cd goc/tests/tester
+cd tests/tester
 ../../go/bin/go run tester.go
-cd ../../../
+cd ../../
