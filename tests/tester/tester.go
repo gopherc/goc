@@ -71,30 +71,35 @@ func runTest(src string, input []byte, args ...string) error {
 	}
 	fmt.Println("[go]", base+":", time.Since(t).Round(time.Millisecond))
 
-	output = filepath.Join(wd, "goc_"+base+suffix)
-	if err := runProgram("../../cmd/goc/goc"+suffix, wd, nil, "build", "-cflags="+cflags, "-o", output, src); err != nil {
-		return err
-	}
-	defer os.Remove(output)
+	f := func(flags string) error {
+		wd := filepath.Dir(src)
+		base := filepath.Base(src)
+		output := filepath.Join(wd, "goc_"+base+suffix)
 
-	t = time.Now()
-	if err := runProgram(output, wd, input, args...); err != nil {
-		return err
-	}
-	fmt.Println(fmt.Sprintf("[goc %s]", cflags), base+":", time.Since(t).Round(time.Millisecond))
-
-	if cflags != "" && cflags != "-O3" {
-		output = filepath.Join(wd, "goc_O3_"+base+suffix)
-		if err := runProgram("../../cmd/goc/goc"+suffix, wd, nil, "build", "-cflags=-O3", "-o", output, src); err != nil {
+		t := time.Now()
+		if err := runProgram("../../cmd/goc/goc"+suffix, wd, nil, "build", "-cflags="+flags, "-o", output, src); err != nil {
 			return err
 		}
+		buildTime := time.Since(t).Round(time.Second)
 		defer os.Remove(output)
 
 		t = time.Now()
 		if err := runProgram(output, wd, input, args...); err != nil {
 			return err
 		}
-		fmt.Println("[goc -O3]", base+":", time.Since(t).Round(time.Millisecond))
+		fmt.Printf("[goc %s] %s: %v (%v)\n", flags, base, time.Since(t).Round(time.Millisecond), buildTime)
+
+		return nil
+	}
+
+	if err := f(cflags); err != nil {
+		return err
+	}
+
+	if cflags != "-O3" {
+		if err := f("-O3"); err != nil {
+			return err
+		}
 	}
 
 	return nil
