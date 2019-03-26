@@ -17,14 +17,11 @@ import (
 )
 
 const (
-	cflags      = "-O0"
+	benchmark   = true
 	conformance = false
 )
 
 func main() {
-	fmt.Println("Optimization level:", cflags)
-	fmt.Println("Conformance tests:", conformance)
-
 	knucleotide, err := ioutil.ReadFile("k-nucleotide-input.txt")
 	if err != nil {
 		panic(err)
@@ -37,11 +34,13 @@ func main() {
 		test("../resize/resize.go", nil)
 	}
 
-	// Benchmarks
-	test("../mandelbrot/mandelbrot.go", nil, "16000")
-	test("../reverse-complement/reverse.go", knucleotide)
-	//test("../k-nucleotide/knucleotide.go", knucleotide)
-	test("../n-body/nbody.go", nil, "50000000")
+	if benchmark {
+		test("../garbage/garbage.go", nil, "20000000")
+		test("../mandelbrot/mandelbrot.go", nil, "16000")
+		test("../reverse-complement/reverse.go", knucleotide)
+		//test("../k-nucleotide/knucleotide.go", knucleotide)
+		test("../n-body/nbody.go", nil, "50000000")
+	}
 }
 
 func test(src string, input []byte, args ...string) {
@@ -92,16 +91,23 @@ func runTest(src string, input []byte, args ...string) error {
 		return nil
 	}
 
-	if err := f(cflags); err != nil {
+	if err := f("-O0"); err != nil {
 		return err
 	}
 
-	if cflags != "-O3" {
+	if benchmark {
+		if err := f("-O1"); err != nil {
+			return err
+		}
+
+		if err := f("-O2"); err != nil {
+			return err
+		}
+
 		if err := f("-O3"); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
