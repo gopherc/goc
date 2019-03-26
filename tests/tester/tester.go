@@ -22,6 +22,8 @@ const (
 )
 
 func main() {
+	//os.Setenv("CC", "clang")
+
 	knucleotide, err := ioutil.ReadFile("k-nucleotide-input.txt")
 	if err != nil {
 		panic(err)

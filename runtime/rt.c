@@ -1,6 +1,11 @@
 // Copyright (c) 2016-2019, Andreas T Jonsson
 // All rights reserved.
 
+#ifdef _CRT_SECURE_NO_WARNINGS
+#undef _CRT_SECURE_NO_WARNINGS
+#endif
+#define _CRT_SECURE_NO_WARNINGS 1
+
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>

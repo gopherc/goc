@@ -83,11 +83,18 @@ func Build() int {
 	switch buildmode {
 	case "exe":
 		var cArgs, cTailArgs []string
-		if baseName := strings.ToLower(filepath.Base(cCompiler)); baseName == "cl" || baseName == "cl.exe" {
+		baseName := strings.TrimSuffix(strings.ToLower(filepath.Base(cCompiler)), ".exe")
+
+		if baseName == "cl" {
 			cArgs = []string{"/nologo", "/TP", "/DGOC_ENTRY=" + entryName, "/Fe" + outputName, "/I" + rtCommonPath, "/I", workPath}
 		} else {
 			cArgs = []string{"-std=c99", "-DGOC_ENTRY=" + entryName, "-o", outputName, "-I", rtCommonPath, "-I", workPath}
-			cTailArgs = []string{"-lm"}
+			if strings.Contains(baseName, "clang") {
+				cTailArgs = []string{}
+			} else {
+				// Assume this is GCC.
+				cTailArgs = []string{"-lm"}
+			}
 		}
 
 		if cFlags != "" {
