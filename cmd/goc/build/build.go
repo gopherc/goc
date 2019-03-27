@@ -103,6 +103,8 @@ func Build() int {
 			}
 		}
 
+		logln("Selected C compiler:", cCompiler)
+
 		logln("Compiling C code...")
 		finalArgs := append(append(cArgs, cFiles...), cTailArgs...)
 		if err := runProgram(cCompiler, "", finalArgs...); err != nil {

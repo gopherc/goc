@@ -168,16 +168,23 @@ IMPL(Z_goZ_syscallZ2EreadFileZ_vi) {
         goto error;
 
     if (feof(fp) != 0) {
-        STORE(sp+46, int32_t, 0);
+        STORE(sp+32, int32_t, 0);
+        STORE(sp+40, int32_t, 1);
         return;
     }
 
     int32_t r = (int32_t)fread(&Z_mem->data[p], 1, (size_t)n, fp);
     STORE(sp+32, int32_t, r);
+    if (r == n || feof(fp) != 0) {
+        STORE(sp+40, int32_t, 0);
+        return;
+    }
+    STORE(sp+40, int32_t, -1);
     return;
 
 error:
-    STORE(sp+32, int32_t, -1);
+    STORE(sp+32, int32_t, 0);
+    STORE(sp+40, int32_t, -1);
 }
 
 IMPL(Z_goZ_syscallZ2EcloseFileZ_vi) {
@@ -242,6 +249,54 @@ IMPL(Z_goZ_syscallZ2EopenFileZ_vi) {
 
 error:
     STORE(sp+32, int64_t, (int64_t)-1);
+}
+
+IMPL(Z_goZ_syscallZ2EflushFileZ_vi) {
+    int64_t fd = LOAD(sp+8, int64_t);
+    if (fd < 0 || fd >= MAX_FILES || !descriptors[fd]) {
+        STORE(sp+16, int64_t, -1);
+        return;
+    }
+    STORE(sp+16, int32_t, (int32_t)fflush(descriptors[fd]));
+}
+
+IMPL(Z_goZ_syscallZ2EtellFileZ_vi) {
+    int64_t fd = LOAD(sp+8, int64_t);
+    if (fd < 3 || fd >= MAX_FILES || !descriptors[fd]) {
+        STORE(sp+16, int64_t, -1);
+        return;
+    }
+    STORE(sp+16, int64_t, (int64_t)ftell(descriptors[fd]));
+}
+
+IMPL(Z_goZ_syscallZ2EseekFileZ_vi) {
+    int64_t fd = LOAD(sp+8, int64_t);
+    int64_t offset = LOAD(sp+16, int64_t);
+    int32_t whence = LOAD(sp+24, int32_t);
+
+    if (fd < 3 || fd >= MAX_FILES || !descriptors[fd])
+        goto error;
+
+    int origin;
+    switch (whence) {
+    case 0:
+        origin = SEEK_SET;
+        break;
+    case 1:
+        origin = SEEK_CUR;
+        break;
+    case 2:
+        origin = SEEK_END;
+        break;
+    default:
+        goto error;
+    }
+
+    STORE(sp+32, int32_t, (int32_t)fseek(descriptors[fd], (long)offset, origin));
+    return;
+
+error:
+    STORE(sp+32, int32_t, -1);
 }
 
 static int write_string(int *offset, const char *str) {

@@ -40,7 +40,7 @@ func main() {
 		test("../garbage/garbage.go", nil, "20000000")
 		test("../mandelbrot/mandelbrot.go", nil, "16000")
 		test("../reverse-complement/reverse.go", knucleotide)
-		//test("../k-nucleotide/knucleotide.go", knucleotide)
+		test("../k-nucleotide/knucleotide.go", knucleotide)
 		test("../n-body/nbody.go", nil, "50000000")
 	}
 }
