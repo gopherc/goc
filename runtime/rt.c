@@ -1,10 +1,17 @@
 // Copyright (c) 2016-2019, Andreas T Jonsson
 // All rights reserved.
 
-#ifdef _CRT_SECURE_NO_WARNINGS
-#undef _CRT_SECURE_NO_WARNINGS
-#endif
-#define _CRT_SECURE_NO_WARNINGS 1
+#ifdef _WIN32
+    #ifdef _CRT_SECURE_NO_WARNINGS
+        #undef _CRT_SECURE_NO_WARNINGS
+    #endif
+    #define _CRT_SECURE_NO_WARNINGS 1
+
+    #define WIN32_LEAN_AND_MEAN
+    #include <windows.h>
+#else
+    extern char **environ;
+#endif 
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -270,9 +277,22 @@ int GOC_ENTRY(int argc, char *argv[]) {
         pointerOffsets[nPtr++] = write_string(&offset, argv[i]);
 
     /* Num env */
-    pointerOffsets[nPtr++] = 0;
+    int *count = &pointerOffsets[nPtr++];
+    *count = 0;
 
-    /* Should push environment variables here. */
+    #ifdef _WIN32
+        for (const char *envs = GetEnvironmentStringsA(); *envs; envs += strlen(envs) + 1) {
+            pointerOffsets[nPtr++] = write_string(&offset, envs);
+            (*count)++;
+        }
+    #else
+        if (environ) {
+            for (const char **envs = environ; *envs; envs++) {
+                pointerOffsets[nPtr++] = write_string(&offset, *envs);
+                (*count)++;
+            }
+        }
+    #endif
     
     uint32_t argvOffset = (uint32_t)offset;
     for (int i = 0; i < nPtr; i++) {

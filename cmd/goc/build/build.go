@@ -134,7 +134,7 @@ func Build() int {
 		return -1
 	}
 
-	logln("Build time:", time.Since(buildStart))
+	logln("Build time:", time.Since(buildStart).Round(time.Second))
 	return 0
 }
 
