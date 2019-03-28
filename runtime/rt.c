@@ -1,6 +1,10 @@
 // Copyright (c) 2016-2019, Andreas T Jonsson
 // All rights reserved.
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef _WIN32
     #ifdef _CRT_SECURE_NO_WARNINGS
         #undef _CRT_SECURE_NO_WARNINGS
@@ -361,3 +365,7 @@ int GOC_ENTRY(int argc, char *argv[]) {
         Z_resumeZ_vv();
     return exit_code;
 }
+
+#ifdef __cplusplus
+}
+#endif

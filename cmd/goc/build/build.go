@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -86,12 +85,10 @@ func Build() int {
 		baseName := strings.TrimSuffix(strings.ToLower(filepath.Base(cCompiler)), ".exe")
 
 		if baseName == "cl" {
-			cArgs = []string{"/nologo", "/TP", "/DGOC_ENTRY=" + entryName, "/Fe" + outputName, "/I" + rtCommonPath, "/I", workPath}
+			cArgs = []string{"/nologo", "/DGOC_ENTRY=" + entryName, "/Fe" + outputName, "/I" + rtCommonPath, "/I", workPath}
 		} else {
 			cArgs = []string{"-std=c99", "-DGOC_ENTRY=" + entryName, "-o", outputName, "-I", rtCommonPath, "-I", workPath}
-			if strings.Contains(baseName, "clang") {
-				cTailArgs = []string{}
-			} else {
+			if !strings.Contains(baseName, "clang") {
 				// Assume this is GCC.
 				cTailArgs = []string{"-lm"}
 			}
@@ -148,23 +145,13 @@ func runProgram(prog, cwd string, args ...string) error {
 	logvln(print...)
 
 	cmd := exec.Command(prog, args...)
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
-
 	cmd.Dir = cwd
-	if err := cmd.Start(); err != nil {
+	if output, err := cmd.CombinedOutput(); err != nil {
+		str := strings.TrimSpace(string(output))
+		if len(str) > 0 {
+			return errors.New(str)
+		}
 		return err
-	}
-
-	slurp, err := ioutil.ReadAll(stderr)
-	if err != nil {
-		return err
-	}
-
-	if err := cmd.Wait(); err != nil {
-		return errors.New(string(slurp))
 	}
 	return nil
 }
@@ -254,7 +241,7 @@ func setupFlags() {
 		cCompiler = "gcc"
 	}
 
-	flag.StringVar(&cCompiler, "cc", cCompiler, "set default C compiler (CC)")
+	flag.StringVar(&cCompiler, "cc", cCompiler, "set default C compiler, 'gcc', 'clang' or 'cl' (CC)")
 	flag.StringVar(&buildTags, "tags", "", "a space-separated list of build tags")
 	flag.StringVar(&wabtPath, "wabt", wabtPath, "wabt tools path")
 	flag.StringVar(&goRoot, "goroot", goRoot, "Go compiler path")

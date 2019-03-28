@@ -6,7 +6,7 @@ if "%GOPHERC_VERSION%"=="" (
 )
 echo GopherC version: %GOPHERC_VERSION%
 
-set BUILD_DIR=%~dp
+set BUILD_DIR=%~dp0
 
 echo [Building Go]
 
@@ -28,7 +28,7 @@ cd cmd/goc
 if exist goc.exe del /Q /F goc.exe
 
 echo package version > version\version.go
-echo var Version = %GOPHERC_VERSION% >> version\version.go
+echo var Version = "%GOPHERC_VERSION%" >> version\version.go
 
 set GOROOT=%BUILD_DIR%\go
 %GOROOT%\bin\go build goc.go
