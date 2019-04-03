@@ -1,0 +1,8 @@
+{
+    "Puts": {
+        "Comment": "Puts prints string on the screen.",
+        "Call": "puts",
+        "Args": ["s", "string"], "Ret": "int",
+        "Block": false, "Safe": true
+    }
+}

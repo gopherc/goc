@@ -1,0 +1,6 @@
+{
+    "string": {
+        "GoType": "string",
+        "CType": "const char*"
+    }
+}

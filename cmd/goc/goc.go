@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/gopherc/goc/cmd/goc/bind"
 	"github.com/gopherc/goc/cmd/goc/build"
 	"github.com/gopherc/goc/cmd/goc/version"
 )
@@ -32,6 +33,8 @@ func main() {
 	os.Args = os.Args[:sz]
 
 	switch tool {
+	case "bind":
+		os.Exit(bind.Bind())
 	case "build":
 		os.Exit(build.Build())
 	case "version":
@@ -57,6 +60,8 @@ func printHeader() {
 
 func printToolHelp(tool string) {
 	switch tool {
+	case "bind":
+		bind.PrintDefaults()
 	case "build":
 		build.PrintDefaults()
 	default:
@@ -65,6 +70,7 @@ func printToolHelp(tool string) {
 }
 
 func printTools() {
+	fmt.Println("\tbind\t" + bind.About())
 	fmt.Println("\tbuild\t" + build.About())
 	fmt.Println("\thelp\tlist tools and options")
 	fmt.Println("\tversion\t" + version.About())
