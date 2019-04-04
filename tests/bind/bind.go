@@ -3,8 +3,12 @@
 
 package main
 
-import "github.com/gopherc/goc/tests/bind/bind"
+import (
+	"fmt"
+
+	"github.com/gopherc/goc/tests/bind/bind"
+)
 
 func main() {
-	bind.Puts("Test bindings!")
+	fmt.Println(bind.Putc(33)) // Should print: !33
 }

@@ -14,6 +14,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/gopherc/goc/cmd/goc/bind"
 )
 
 func Build() int {
@@ -50,11 +52,24 @@ func Build() int {
 	args = append(args, "-tags", "\"goc"+buildTags+"\"")
 
 	inputFile, _ := filepath.Abs(inputFiles[0])
+	inputPath := filepath.Dir(inputFile)
 	args = append(args, inputFile)
+
+	tempBindOutput := filepath.Join(workPath, "bind_goc.c")
+	if generateCBindings {
+		logln("Generating C bindings...")
+		bind.Silent = silent
+		bind.Verbose = verbose
+
+		if err := bind.Generate(inputPath, tempBindOutput); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return -1
+		}
+	}
 
 	logln("Building Go code...")
 	goBin := filepath.Join(goRoot, "bin", "go")
-	if err := runProgram(goBin, filepath.Dir(inputFile), args...); err != nil {
+	if err := runProgram(goBin, inputPath, args...); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return -1
 	}
@@ -77,6 +92,16 @@ func Build() int {
 		tempCOutput,
 		rtImplPath,
 		filepath.Join(runtimePath, "rt.c"),
+	}
+
+	if generateCBindings {
+		cFiles = append(cFiles, tempBindOutput)
+	} else {
+		binding := filepath.Join(inputPath, "bind_goc.c")
+		if _, err := os.Stat(binding); !os.IsNotExist(err) {
+			logvln("Found C binding:", binding)
+			cFiles = append(cFiles, binding)
+		}
 	}
 
 	switch buildmode {
@@ -214,7 +239,8 @@ var (
 	buildmode  = "exe"
 
 	silent,
-	verbose bool
+	verbose,
+	generateCBindings bool
 
 	wabtPath,
 	runtimePath,
@@ -251,6 +277,7 @@ func setupFlags() {
 	flag.StringVar(&workPath, "work", workPath, "specify temporary work path")
 	flag.StringVar(&cFlags, "cflags", cFlags, "extra parameters for the C compiler")
 	flag.StringVar(&buildmode, "buildmode", buildmode, "set compiler buildmode, 'exe' or 'c-source'")
+	flag.BoolVar(&generateCBindings, "b", generateCBindings, "generate C bindings")
 	flag.BoolVar(&silent, "s", silent, "silent mode")
 	flag.BoolVar(&verbose, "v", verbose, "verbose")
 	flag.Parse()

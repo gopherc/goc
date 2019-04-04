@@ -1,6 +1,14 @@
 {
-    "string": {
-        "GoType": "string",
-        "CType": "const char*"
+    "goint->cint": {
+        "GoType": "int",
+        "InternalGoType": "int32",
+        "CType": "int",
+        "Conversion": "int32(@)"
+    },
+    "cint->goint": {
+        "GoType": "int",
+        "InternalGoType": "int32",
+        "CType": "int",
+        "Conversion": "int(@)"
     }
 }

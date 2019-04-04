@@ -1,8 +1,8 @@
 {
-    "Puts": {
-        "Comment": "Puts prints string on the screen.",
-        "Call": "puts",
-        "Args": ["s", "string"], "Ret": "int",
+    "Putc": {
+        "Comment": "Putc prints a character on the screen.",
+        "Call": "putchar",
+        "Args": ["ch", "goint->cint"], "Ret": "cint->goint",
         "Block": false, "Safe": true
     }
 }
