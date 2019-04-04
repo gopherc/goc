@@ -94,6 +94,7 @@ func Build() int {
 		filepath.Join(runtimePath, "rt.c"),
 	}
 
+	var foundBindings bool
 	if generateCBindings {
 		cFiles = append(cFiles, tempBindOutput)
 	} else {
@@ -101,6 +102,7 @@ func Build() int {
 		if _, err := os.Stat(binding); !os.IsNotExist(err) {
 			logvln("Found C binding:", binding)
 			cFiles = append(cFiles, binding)
+			foundBindings = true
 		}
 	}
 
@@ -152,6 +154,13 @@ func Build() int {
 		if err := copyFiles(outputName, rtCommonPath, "*.c *.h"); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return -1
+		}
+
+		if foundBindings {
+			if err := copyFiles(outputName, inputPath, "bind_goc.c"); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				return -1
+			}
 		}
 	default:
 		fmt.Fprintln(os.Stderr, "invalid buildmode:", buildmode)

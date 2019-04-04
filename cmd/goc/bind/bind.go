@@ -39,7 +39,12 @@ func Bind() int {
 		return -1
 	}
 
-	if err := Generate(inputPaths[0], cBindFile); err != nil {
+	output := cBindFile
+	if output == "" {
+		output = filepath.Join(inputPaths[0], "bind_goc.c")
+	}
+
+	if err := Generate(inputPaths[0], output); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return -1
 	}
@@ -49,6 +54,15 @@ func Bind() int {
 func Generate(projectPath, outputFile string) error {
 	var goImports, cIncludes map[string]struct{}
 
+	getDir := func(base, path string) (string, error) {
+		pd := filepath.Dir(path)
+		rel, err := filepath.Rel(base, pd)
+		if err != nil {
+			return "", err
+		}
+		return filepath.Clean(rel), nil
+	}
+
 	// Start looking for types.
 	if err := filepath.Walk(projectPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -56,7 +70,10 @@ func Generate(projectPath, outputFile string) error {
 		}
 
 		if info.Mode().IsRegular() {
-			dir := filepath.Clean(filepath.Dir(path))
+			dir, err := getDir(projectPath, path)
+			if err != nil {
+				return err
+			}
 
 			if info.Name() == "goc.type" {
 				fp, err := os.Open(path)
@@ -101,13 +118,16 @@ func Generate(projectPath, outputFile string) error {
 	fmt.Fprintf(fpc, "// %v\n\n", time.Now())
 	fmt.Fprint(fpc, "#include <string.h>\n")
 	fmt.Fprint(fpc, "#include <wasm-rt.h>\n\n")
+
+	if len(cIncludes) > 0 {
+		for inc := range cIncludes {
+			fmt.Fprintf(fpc, "#include <%s>\n", inc)
+		}
+		fmt.Fprint(fpc, "\n")
+	}
+
 	fmt.Fprint(fpc, "extern uint32_t (*Z_getspZ_iv)();\n")
 	fmt.Fprint(fpc, "extern wasm_rt_memory_t *Z_mem;\n\n")
-
-	for inc := range cIncludes {
-		fmt.Fprintf(fpc, "#include <%s>\n", inc)
-	}
-	fmt.Fprint(fpc, "\n")
 
 	// Search for bindings.
 	if err := filepath.Walk(projectPath, func(path string, info os.FileInfo, err error) error {
@@ -116,7 +136,10 @@ func Generate(projectPath, outputFile string) error {
 		}
 
 		if info.Mode().IsRegular() {
-			dir := filepath.Clean(filepath.Dir(path))
+			dir, err := getDir(projectPath, path)
+			if err != nil {
+				return err
+			}
 
 			if info.Name() == "goc.bind" {
 				fp, err := os.Open(path)
@@ -385,7 +408,7 @@ func About() string {
 
 var (
 	moduleName = "github.com/user/mod"
-	cBindFile  = "bind_goc.c"
+	cBindFile  string
 
 	Silent,
 	Verbose bool
