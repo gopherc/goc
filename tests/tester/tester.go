@@ -34,6 +34,7 @@ func main() {
 		test("../fiber/fiber.go", nil)
 		test("../hello/hello.go", nil)
 		test("../resize/resize.go", nil)
+		test("../bind/bind.go", nil)
 	}
 
 	if benchmark {

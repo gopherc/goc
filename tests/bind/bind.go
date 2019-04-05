@@ -10,5 +10,6 @@ import (
 )
 
 func main() {
-	fmt.Println(bind.Putc(33)) // Should print: !33
+	// Should print: !33
+	fmt.Println(bind.Putc(33))
 }
