@@ -107,14 +107,20 @@ func Build() int {
 	}
 
 	switch buildmode {
-	case "exe":
+	case "exe", "shared":
 		var cArgs, cTailArgs []string
 		baseName := strings.TrimSuffix(strings.ToLower(filepath.Base(cCompiler)), ".exe")
 
 		if baseName == "cl" {
 			cArgs = []string{"/nologo", "/DGOC_ENTRY=" + entryName, "/Fe" + outputName, "/I" + rtCommonPath, "/I", workPath}
+			if buildmode == "shared" {
+				cArgs = append(cArgs, "/LD")
+			}
 		} else {
 			cArgs = []string{"-std=c99", "-DGOC_ENTRY=" + entryName, "-o", outputName, "-I", rtCommonPath, "-I", workPath}
+			if buildmode == "shared" {
+				cArgs = append(cArgs, "-shared")
+			}
 			if !strings.Contains(baseName, "clang") {
 				// Assume this is GCC.
 				cTailArgs = []string{"-lm"}
@@ -285,7 +291,7 @@ func setupFlags() {
 	flag.StringVar(&entryName, "entry", entryName, "name of C entry point")
 	flag.StringVar(&workPath, "work", workPath, "specify temporary work path")
 	flag.StringVar(&cFlags, "cflags", cFlags, "extra parameters for the C compiler")
-	flag.StringVar(&buildmode, "buildmode", buildmode, "set compiler buildmode, 'exe' or 'c-source'")
+	flag.StringVar(&buildmode, "buildmode", buildmode, "set compiler buildmode, 'exe', 'shared' or 'c-source'")
 	flag.BoolVar(&generateCBindings, "b", generateCBindings, "generate C bindings")
 	flag.BoolVar(&silent, "s", silent, "silent mode")
 	flag.BoolVar(&verbose, "v", verbose, "verbose")
