@@ -17,16 +17,17 @@ import (
 
 type TypeSpec struct {
 	GoType, InternalGoType, CType string
-	Import, Include               string
-	Conversion                    string
+	Import, Conversion            string
+	CDeclarations                 []string
 }
 
 type FuncBinding struct {
-	Comment     string
-	Call        string
-	Args        []string
-	Ret         string
-	Block, Safe bool
+	Comment          string
+	Call             string
+	Args             []string
+	Ret              string
+	CPrefix, CSuffix string
+	Extern           bool
 }
 
 var allTypes = map[string]TypeSpec{}
@@ -52,7 +53,10 @@ func Bind() int {
 }
 
 func Generate(projectPath, outputFile string) error {
-	var goImports, cIncludes map[string]struct{}
+	var (
+		goImports     = map[string]struct{}{}
+		cDeclarations []string
+	)
 
 	getDir := func(base, path string) (string, error) {
 		pd := filepath.Dir(path)
@@ -95,8 +99,8 @@ func Generate(projectPath, outputFile string) error {
 					if ty.Import != "" {
 						goImports[ty.Import] = struct{}{}
 					}
-					if ty.Include != "" {
-						cIncludes[ty.Include] = struct{}{}
+					for _, dec := range ty.CDeclarations {
+						cDeclarations = append(cDeclarations, dec)
 					}
 					allTypes[filepath.Join(pkgPath, name)] = ty
 				}
@@ -120,9 +124,9 @@ func Generate(projectPath, outputFile string) error {
 	fmt.Fprint(fpc, "#include <string.h>\n")
 	fmt.Fprint(fpc, "#include <wasm-rt.h>\n\n")
 
-	if len(cIncludes) > 0 {
-		for inc := range cIncludes {
-			fmt.Fprintf(fpc, "#include <%s>\n", inc)
+	if len(cDeclarations) > 0 {
+		for _, dec := range cDeclarations {
+			fmt.Fprintln(fpc, dec)
 		}
 		fmt.Fprint(fpc, "\n")
 	}
@@ -327,24 +331,32 @@ func generateCTrampoline(fp io.Writer, pkgPath, funcName string, bind FuncBindin
 	if bind.Ret != "" {
 		fullName := filepath.Join(pkgPath, bind.Ret)
 		retCType = allTypes[fullName].CType
-
-		fmt.Fprintf(fp, "extern %s %s(", retCType, bind.Call)
-	} else {
-		fmt.Fprintf(fp, "extern void %s(", bind.Call)
 	}
 
-	for i := 0; i < len(bind.Args); i += 2 {
-		fullName := filepath.Join(pkgPath, bind.Args[i+1])
-		typeSpec := allTypes[fullName]
-		if i > 0 {
-			fmt.Fprint(fp, ", ")
+	if bind.Extern {
+		if retCType != "" {
+			fmt.Fprintf(fp, "extern %s %s(", retCType, bind.Call)
+		} else {
+			fmt.Fprintf(fp, "extern void %s(", bind.Call)
 		}
-		fmt.Fprintf(fp, "%s", typeSpec.CType)
+
+		for i := 0; i < len(bind.Args); i += 2 {
+			fullName := filepath.Join(pkgPath, bind.Args[i+1])
+			typeSpec := allTypes[fullName]
+			if i > 0 {
+				fmt.Fprint(fp, ", ")
+			}
+			fmt.Fprintf(fp, "%s", typeSpec.CType)
+		}
+		fmt.Fprint(fp, ");\n")
 	}
-	fmt.Fprint(fp, ");\n")
 
 	mangledName := mangleCName(filepath.Join(moduleName, pkgPath), "goc"+funcName)
 	fmt.Fprintf(fp, "static void _%s(uint32_t sp) {\n", mangledName)
+
+	if bind.CPrefix != "" {
+		fmt.Fprintf(fp, "\t%s\n", bind.CPrefix)
+	}
 
 	fmt.Fprint(fp, "\tsp += 8;\n")
 	for i := 0; i < len(bind.Args); i += 2 {
@@ -374,6 +386,10 @@ func generateCTrampoline(fp io.Writer, pkgPath, funcName string, bind FuncBindin
 
 	if retCType != "" {
 		fmt.Fprintf(fp, "\tmemcpy(&Z_mem->data[sp], &_r, sizeof(%s));\n", retCType)
+	}
+
+	if bind.CSuffix != "" {
+		fmt.Fprintf(fp, "\t%s\n", bind.CSuffix)
 	}
 
 	fmt.Fprintf(fp, "}\nvoid (*%s)(uint32_t) = _%s;\n\n", mangledName, mangledName)

@@ -53,7 +53,7 @@ int descriptor_free_index = 3;
 int descriptor_free_list[MAX_FILES] = {0};
 FILE *descriptors[MAX_FILES] = {0};
 
-int32_t exit_code = 0;
+int32_t exit_code = -1;
 int32_t has_exit = 0;
 
 /* export: 'run' */

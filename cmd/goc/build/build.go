@@ -106,6 +106,16 @@ func Build() int {
 		}
 	}
 
+	var foundHelper bool
+	if generateCBindings || foundBindings {
+		helper := filepath.Join(inputPath, "helper_goc.c")
+		if _, err := os.Stat(helper); !os.IsNotExist(err) {
+			logvln("Found C binding helper:", helper)
+			cFiles = append(cFiles, helper)
+			foundHelper = true
+		}
+	}
+
 	switch buildmode {
 	case "exe", "shared":
 		var cArgs, cTailArgs []string
@@ -164,6 +174,12 @@ func Build() int {
 
 		if foundBindings {
 			if err := copyFiles(outputName, inputPath, "bind_goc.c"); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				return -1
+			}
+		}
+		if foundHelper {
+			if err := copyFiles(outputName, inputPath, "helper_goc.c"); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				return -1
 			}
