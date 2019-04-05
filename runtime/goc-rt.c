@@ -15,7 +15,7 @@ extern "C" {
     #include <windows.h>
 #else
     extern char **environ;
-#endif 
+#endif
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -27,8 +27,21 @@ extern "C" {
 
 #include <wasm-rt.h>
 
+#ifndef GOC_CALLOC
+    #define GOC_CALLOC calloc
+#endif
+
+#ifndef GOC_REALLOC
+    #define GOC_REALLOC realloc
+#endif
+
+#ifndef GOC_ENTRY
+    #define GOC_ENTRY main
+#endif
+
 #define MAX_ARGC 256
 #define MAX_FILES 256
+#define PAGE_SIZE 65536
 
 #define LOAD(addr, ty) (*(ty*)(Z_mem->data + (addr)))
 #define STORE(addr, ty, v) (*(ty*)(Z_mem->data + (addr)) = (v))
@@ -83,6 +96,42 @@ static int32_t write(int32_t sp) {
         return -1;
     
     return (int32_t)fwrite(&Z_mem->data[p], 1, (size_t)n, fp);
+}
+
+uint32_t wasm_rt_call_stack_depth;
+
+void wasm_rt_trap(wasm_rt_trap_t code) {
+    panic("trap!");
+}
+
+uint32_t wasm_rt_register_func_type(uint32_t param_count, uint32_t result_count, ...) {
+    return 0;
+}
+
+void wasm_rt_allocate_memory(wasm_rt_memory_t* memory, uint32_t initial_pages, uint32_t max_pages) {
+    memory->pages = initial_pages;
+    memory->max_pages = max_pages;
+    memory->size = initial_pages * PAGE_SIZE;
+    memory->data = GOC_CALLOC(memory->size, 1);
+}
+
+uint32_t wasm_rt_grow_memory(wasm_rt_memory_t* memory, uint32_t delta) {
+    uint32_t old_pages = memory->pages;
+    uint32_t new_pages = memory->pages + delta;
+    if (new_pages < old_pages || new_pages > memory->max_pages)
+        return (uint32_t)-1;
+
+    memory->pages = new_pages;
+    memory->size = new_pages * PAGE_SIZE;
+    memory->data = GOC_REALLOC(memory->data, memory->size);
+    memset(memory->data + old_pages * PAGE_SIZE, 0, delta * PAGE_SIZE);
+    return old_pages;
+}
+
+void wasm_rt_allocate_table(wasm_rt_table_t* table, uint32_t elements, uint32_t max_elements) {
+    table->size = elements;
+    table->max_size = max_elements;
+    table->data = GOC_CALLOC(table->size, sizeof(wasm_rt_elem_t));
 }
 
 /* import: 'go' 'debug' */
@@ -212,7 +261,7 @@ IMPL(Z_goZ_syscallZ2EopenFileZ_vi) {
     int32_t mode = LOAD(sp+20, int32_t);
     int32_t perm = LOAD(sp+24, int32_t);
 
-    char *tmp = malloc((size_t)len+1);
+    char *tmp = GOC_CALLOC((size_t)len+1, 1);
     memcpy(tmp, (void*)ptr, len);
     tmp[len] = 0;
 
@@ -241,7 +290,7 @@ IMPL(Z_goZ_syscallZ2EopenFileZ_vi) {
     }
 
     FILE *fp = fopen(tmp, access);
-    free(tmp);
+    GOC_REALLOC(tmp, 0);
 
     if (fp == 0 || descriptor_free_index == MAX_FILES - 1)
         goto error;

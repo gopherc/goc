@@ -85,13 +85,9 @@ func Build() int {
 	// Give C compiler absolute path.
 	tempCOutput = filepath.Join(workPath, tempCOutput)
 
-	rtCommonPath := filepath.Join(gocRoot, "wabt", "wasm2c")
-	rtImplPath := filepath.Join(rtCommonPath, "wasm-rt-impl.c")
-
 	cFiles := []string{
 		tempCOutput,
-		rtImplPath,
-		filepath.Join(runtimePath, "rt.c"),
+		filepath.Join(runtimePath, "goc-rt.c"),
 	}
 
 	var foundBindings bool
@@ -122,12 +118,12 @@ func Build() int {
 		baseName := strings.TrimSuffix(strings.ToLower(filepath.Base(cCompiler)), ".exe")
 
 		if baseName == "cl" {
-			cArgs = []string{"/nologo", "/DGOC_ENTRY=" + entryName, "/Fe" + outputName, "/I" + rtCommonPath, "/I", workPath}
+			cArgs = []string{"/nologo", "/DGOC_ENTRY=" + entryName, "/Fe" + outputName, "/I" + runtimePath, "/I", workPath}
 			if buildmode == "shared" {
 				cArgs = append(cArgs, "/LD")
 			}
 		} else {
-			cArgs = []string{"-std=c99", "-DGOC_ENTRY=" + entryName, "-o", outputName, "-I", rtCommonPath, "-I", workPath}
+			cArgs = []string{"-std=c99", "-DGOC_ENTRY=" + entryName, "-o", outputName, "-I", runtimePath, "-I", workPath}
 			if buildmode == "shared" {
 				cArgs = append(cArgs, "-shared")
 			}
@@ -167,17 +163,13 @@ func Build() int {
 			return -1
 		}
 
-		if err := copyFiles(outputName, rtCommonPath, "*.c *.h"); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return -1
-		}
-
 		if foundBindings {
 			if err := copyFiles(outputName, inputPath, "bind_goc.c"); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				return -1
 			}
 		}
+
 		if foundHelper {
 			if err := copyFiles(outputName, inputPath, "helper_goc.c"); err != nil {
 				fmt.Fprintln(os.Stderr, err)
