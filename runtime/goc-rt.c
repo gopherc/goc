@@ -27,13 +27,10 @@ extern "C" {
 
 #include <wasm-rt.h>
 
-#ifndef GOC_CALLOC
-    #define GOC_CALLOC calloc
+#ifndef GOC_ALLOC
+    #define GOC_ALLOC realloc
 #endif
-
-#ifndef GOC_REALLOC
-    #define GOC_REALLOC realloc
-#endif
+extern void *GOC_ALLOC(void*, size_t);
 
 #ifndef GOC_ENTRY
     #define GOC_ENTRY main
@@ -112,7 +109,8 @@ void wasm_rt_allocate_memory(wasm_rt_memory_t* memory, uint32_t initial_pages, u
     memory->pages = initial_pages;
     memory->max_pages = max_pages;
     memory->size = initial_pages * PAGE_SIZE;
-    memory->data = GOC_CALLOC(memory->size, 1);
+    memory->data = GOC_ALLOC(NULL, memory->size);
+    memset(memory->data, 0, memory->size);
 }
 
 uint32_t wasm_rt_grow_memory(wasm_rt_memory_t* memory, uint32_t delta) {
@@ -123,7 +121,7 @@ uint32_t wasm_rt_grow_memory(wasm_rt_memory_t* memory, uint32_t delta) {
 
     memory->pages = new_pages;
     memory->size = new_pages * PAGE_SIZE;
-    memory->data = GOC_REALLOC(memory->data, memory->size);
+    memory->data = GOC_ALLOC(memory->data, memory->size);
     memset(memory->data + old_pages * PAGE_SIZE, 0, delta * PAGE_SIZE);
     return old_pages;
 }
@@ -131,7 +129,8 @@ uint32_t wasm_rt_grow_memory(wasm_rt_memory_t* memory, uint32_t delta) {
 void wasm_rt_allocate_table(wasm_rt_table_t* table, uint32_t elements, uint32_t max_elements) {
     table->size = elements;
     table->max_size = max_elements;
-    table->data = GOC_CALLOC(table->size, sizeof(wasm_rt_elem_t));
+    table->data = GOC_ALLOC(NULL, table->size * sizeof(wasm_rt_elem_t));
+    memset(table->data, 0, table->size * sizeof(wasm_rt_elem_t));
 }
 
 /* import: 'go' 'debug' */
@@ -261,7 +260,7 @@ IMPL(Z_goZ_syscallZ2EopenFileZ_vi) {
     int32_t mode = LOAD(sp+20, int32_t);
     int32_t perm = LOAD(sp+24, int32_t);
 
-    char *tmp = GOC_CALLOC((size_t)len+1, 1);
+    char *tmp = GOC_ALLOC((size_t)len+1, 1);
     memcpy(tmp, (void*)ptr, len);
     tmp[len] = 0;
 
@@ -290,7 +289,7 @@ IMPL(Z_goZ_syscallZ2EopenFileZ_vi) {
     }
 
     FILE *fp = fopen(tmp, access);
-    GOC_REALLOC(tmp, 0);
+    GOC_ALLOC(tmp, 0);
 
     if (fp == 0 || descriptor_free_index == MAX_FILES - 1)
         goto error;
