@@ -76,6 +76,7 @@ func Generate(projectPath, outputFile string) error {
 			if err != nil {
 				return err
 			}
+			pkgPath = filepath.Join(moduleName, pkgPath)
 
 			if info.Name() == "goc.type" {
 				fp, err := os.Open(path)
@@ -147,6 +148,7 @@ func Generate(projectPath, outputFile string) error {
 			if err != nil {
 				return err
 			}
+			pkgPath = filepath.Join(moduleName, pkgPath)
 
 			if info.Name() == "goc.bind" {
 				fp, err := os.Open(path)
