@@ -17,7 +17,7 @@ import (
 
 type TypeSpec struct {
 	GoType, InternalGoType, CType string
-	Import, Conversion            string
+	Conversion                    string
 	CRef, CPush                   string
 	CDeclarations                 []string
 }
@@ -54,10 +54,7 @@ func Bind() int {
 }
 
 func Generate(projectPath, outputFile string) error {
-	var (
-		goImports     = map[string]struct{}{}
-		cDeclarations []string
-	)
+	var cDeclarations []string
 
 	getDir := func(base, path string) (string, error) {
 		pd := filepath.Dir(path)
@@ -97,18 +94,17 @@ func Generate(projectPath, outputFile string) error {
 					if ty.InternalGoType == "" {
 						ty.InternalGoType = ty.GoType
 					}
-					if ty.Import != "" {
-						goImports[ty.Import] = struct{}{}
-					}
 					for _, dec := range ty.CDeclarations {
 						cDeclarations = append(cDeclarations, dec)
 					}
 
 					cleanName := filepath.Join(pkgPath, name)
-					if strings.HasPrefix(name, "*") {
-						cleanName = strings.TrimPrefix(name, "*")
+					if strings.HasPrefix(name, ".") {
+						cleanName = strings.TrimPrefix(name, ".")
 					}
-					allTypes[strings.ReplaceAll(cleanName, "\\", "/")] = ty
+
+					cleanName = strings.ReplaceAll(cleanName, "\\", "/")
+					allTypes[cleanName] = ty
 				}
 			}
 		}
@@ -165,7 +161,7 @@ func Generate(projectPath, outputFile string) error {
 					return err
 				}
 
-				if err := generateGoTrampoline(fpc, pkgPath, filepath.Dir(path), bindings, goImports); err != nil {
+				if err := generateGoTrampoline(fpc, pkgPath, filepath.Dir(path), bindings); err != nil {
 					return nil
 				}
 			}
@@ -188,7 +184,7 @@ func createTypePath(pkgPath, ty string) string {
 	return ty
 }
 
-func generateGoTrampoline(fpc io.Writer, pkgPath, path string, bindings map[string]FuncBinding, imports map[string]struct{}) error {
+func generateGoTrampoline(fpc io.Writer, pkgPath, path string, bindings map[string]FuncBinding) error {
 	logvln("Generate:", pkgPath)
 
 	fpg, err := os.Create(filepath.Join(path, "bind_goc.go"))
@@ -215,6 +211,30 @@ func generateGoTrampoline(fpc io.Writer, pkgPath, path string, bindings map[stri
 	fmt.Fprint(fpg, "// +build goc\n\n")
 	fmt.Fprintf(fpg, "package %s\n\n", pkg)
 
+	imports := map[string]struct{}{}
+
+	for funcName, bind := range bindings {
+		fullFuncName := filepath.Join(pkgPath, funcName)
+		if len(bind.Args)%2 != 0 {
+			fmt.Fprintf(os.Stderr, "%s has invalid arguments\n", fullFuncName)
+		}
+
+		for i := 0; i < len(bind.Args); i += 2 {
+			ty := bind.Args[i+1]
+			fullName := createTypePath(pkgPath, ty)
+			typeSpec, ok := allTypes[fullName]
+			if !ok {
+				fmt.Fprintf(os.Stderr, "%s has invalid argument type: %s\n", fullFuncName, fullName)
+			}
+
+			if dir := strings.ReplaceAll(filepath.Dir(typeSpec.GoType), "\\", "/"); dir != "." && dir != pkgPath {
+				base := filepath.Base(typeSpec.GoType)
+				pkg := strings.TrimSuffix(base, filepath.Ext(base))
+				imports[dir+"/"+pkg] = struct{}{}
+			}
+		}
+	}
+
 	if len(imports) > 0 {
 		fmt.Fprint(fpg, "import (\n")
 		for imp := range imports {
@@ -225,11 +245,7 @@ func generateGoTrampoline(fpc io.Writer, pkgPath, path string, bindings map[stri
 
 	for funcName, bind := range bindings {
 		logvln(funcName, "->", bind.Call)
-
 		fullFuncName := filepath.Join(pkgPath, funcName)
-		if len(bind.Args)%2 != 0 {
-			fmt.Fprintf(os.Stderr, "%s has invalid arguments\n", fullFuncName)
-		}
 
 		fmt.Fprintf(fps, "TEXT ·goc%s(SB), NOSPLIT, $0\n\tCallImport\n\tRET\n\n", funcName)
 
@@ -250,16 +266,13 @@ func generateGoTrampoline(fpc io.Writer, pkgPath, path string, bindings map[stri
 					fmt.Fprintf(fpg, "%s ", name)
 
 					fullName := createTypePath(pkgPath, ty)
-					typeSpec, ok := allTypes[fullName]
-					if !ok {
-						fmt.Fprintf(os.Stderr, "%s has invalid argument type: %s\n", fullFuncName, fullName)
-					}
+					typeSpec := allTypes[fullName]
+					tyName := typeSpec.GoType
 
 					if internal {
-						fmt.Fprint(fpg, typeSpec.InternalGoType)
-					} else {
-						fmt.Fprint(fpg, typeSpec.GoType)
+						tyName = typeSpec.InternalGoType
 					}
+					fmt.Fprint(fpg, filepath.Base(tyName))
 				}
 			}
 		}
@@ -273,7 +286,7 @@ func generateGoTrampoline(fpc io.Writer, pkgPath, path string, bindings map[stri
 			if !ok {
 				fmt.Fprintf(os.Stderr, "%s has invalid return argument type: %s\n", fullFuncName, fullName)
 			}
-			fmt.Fprintf(fpg, " %s\n\n", typeSpec.InternalGoType)
+			fmt.Fprintf(fpg, " %s\n\n", filepath.Base(typeSpec.InternalGoType))
 		} else {
 			fmt.Fprint(fpg, "\n\n")
 		}
@@ -288,7 +301,7 @@ func generateGoTrampoline(fpc io.Writer, pkgPath, path string, bindings map[stri
 		if bind.Ret != "" {
 			fullName := createTypePath(pkgPath, bind.Ret)
 			typeSpec := allTypes[fullName]
-			fmt.Fprintf(fpg, ") %s {\n", typeSpec.GoType)
+			fmt.Fprintf(fpg, ") %s {\n", filepath.Base(typeSpec.GoType))
 		} else {
 			fmt.Fprint(fpg, ") {\n")
 		}
