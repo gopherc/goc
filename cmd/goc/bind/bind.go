@@ -18,6 +18,7 @@ import (
 type TypeSpec struct {
 	GoType, InternalGoType, CType string
 	Import, Conversion            string
+	CRef, CPush                   string
 	CDeclarations                 []string
 }
 
@@ -27,7 +28,7 @@ type FuncBinding struct {
 	Args             []string
 	Ret              string
 	CPrefix, CSuffix string
-	Extern           bool
+	Extern, Member   bool
 }
 
 var allTypes = map[string]TypeSpec{}
@@ -102,7 +103,12 @@ func Generate(projectPath, outputFile string) error {
 					for _, dec := range ty.CDeclarations {
 						cDeclarations = append(cDeclarations, dec)
 					}
-					allTypes[filepath.Join(pkgPath, name)] = ty
+
+					cleanName := filepath.Join(pkgPath, name)
+					if strings.HasPrefix(name, "*") {
+						cleanName = strings.TrimPrefix(name, "*")
+					}
+					allTypes[strings.ReplaceAll(cleanName, "\\", "/")] = ty
 				}
 			}
 		}
@@ -174,6 +180,14 @@ func Generate(projectPath, outputFile string) error {
 	return nil
 }
 
+func createTypePath(pkgPath, ty string) string {
+	local := strings.ReplaceAll(filepath.Join(pkgPath, ty), "\\", "/")
+	if _, ok := allTypes[local]; ok {
+		return local
+	}
+	return ty
+}
+
 func generateGoTrampoline(fpc io.Writer, pkgPath, path string, bindings map[string]FuncBinding, imports map[string]struct{}) error {
 	logvln("Generate:", pkgPath)
 
@@ -235,7 +249,7 @@ func generateGoTrampoline(fpc io.Writer, pkgPath, path string, bindings map[stri
 				} else {
 					fmt.Fprintf(fpg, "%s ", name)
 
-					fullName := filepath.Join(pkgPath, ty)
+					fullName := createTypePath(pkgPath, ty)
 					typeSpec, ok := allTypes[fullName]
 					if !ok {
 						fmt.Fprintf(os.Stderr, "%s has invalid argument type: %s\n", fullFuncName, fullName)
@@ -254,7 +268,7 @@ func generateGoTrampoline(fpc io.Writer, pkgPath, path string, bindings map[stri
 		fmt.Fprint(fpg, ")")
 
 		if bind.Ret != "" {
-			fullName := filepath.Join(pkgPath, bind.Ret)
+			fullName := createTypePath(pkgPath, bind.Ret)
 			typeSpec, ok := allTypes[fullName]
 			if !ok {
 				fmt.Fprintf(os.Stderr, "%s has invalid return argument type: %s\n", fullFuncName, fullName)
@@ -272,7 +286,7 @@ func generateGoTrampoline(fpc io.Writer, pkgPath, path string, bindings map[stri
 		writeArgs("", false)
 
 		if bind.Ret != "" {
-			fullName := filepath.Join(pkgPath, bind.Ret)
+			fullName := createTypePath(pkgPath, bind.Ret)
 			typeSpec := allTypes[fullName]
 			fmt.Fprintf(fpg, ") %s {\n", typeSpec.GoType)
 		} else {
@@ -283,7 +297,7 @@ func generateGoTrampoline(fpc io.Writer, pkgPath, path string, bindings map[stri
 			name := bind.Args[i]
 			ty := bind.Args[i+1]
 
-			fullName := filepath.Join(pkgPath, ty)
+			fullName := createTypePath(pkgPath, ty)
 			typeSpec := allTypes[fullName]
 
 			conv := strings.ReplaceAll(typeSpec.Conversion, "@", name)
@@ -303,7 +317,7 @@ func generateGoTrampoline(fpc io.Writer, pkgPath, path string, bindings map[stri
 		fmt.Fprint(fpg, ")\n")
 
 		if bind.Ret != "" {
-			fullName := filepath.Join(pkgPath, bind.Ret)
+			fullName := createTypePath(pkgPath, bind.Ret)
 			typeSpec, ok := allTypes[fullName]
 			if !ok {
 				fmt.Fprintf(os.Stderr, "%s has invalid return argument type: %s\n", fullFuncName, fullName)
@@ -327,10 +341,15 @@ func generateGoTrampoline(fpc io.Writer, pkgPath, path string, bindings map[stri
 }
 
 func generateCTrampoline(fp io.Writer, pkgPath, funcName string, bind FuncBinding) error {
-	var retCType string
+	var (
+		retCType string
+		retSpec  TypeSpec
+	)
+
 	if bind.Ret != "" {
-		fullName := filepath.Join(pkgPath, bind.Ret)
-		retCType = allTypes[fullName].CType
+		fullName := createTypePath(pkgPath, bind.Ret)
+		retSpec = allTypes[fullName]
+		retCType = retSpec.CType
 	}
 
 	if bind.Extern {
@@ -341,7 +360,7 @@ func generateCTrampoline(fp io.Writer, pkgPath, funcName string, bind FuncBindin
 		}
 
 		for i := 0; i < len(bind.Args); i += 2 {
-			fullName := filepath.Join(pkgPath, bind.Args[i+1])
+			fullName := createTypePath(pkgPath, bind.Args[i+1])
 			typeSpec := allTypes[fullName]
 			if i > 0 {
 				fmt.Fprint(fp, ", ")
@@ -363,7 +382,7 @@ func generateCTrampoline(fp io.Writer, pkgPath, funcName string, bind FuncBindin
 		name := bind.Args[i]
 		ty := bind.Args[i+1]
 
-		fullName := filepath.Join(pkgPath, ty)
+		fullName := createTypePath(pkgPath, ty)
 		typeSpec := allTypes[fullName]
 
 		fmt.Fprintf(fp, "\t%s _%s = *(%s*)&Z_mem->data[sp];\n", typeSpec.CType, name, typeSpec.CType)
@@ -377,15 +396,26 @@ func generateCTrampoline(fp io.Writer, pkgPath, funcName string, bind FuncBindin
 	}
 
 	for i := 0; i < len(bind.Args); i += 2 {
+		fullName := createTypePath(pkgPath, bind.Args[i+1])
+		typeSpec := allTypes[fullName]
+
 		if i > 0 {
 			fmt.Fprint(fp, ", ")
 		}
-		fmt.Fprintf(fp, "_%s", bind.Args[i])
+		if typeSpec.CRef != "" {
+			fmt.Fprint(fp, strings.ReplaceAll(typeSpec.CRef, "@", "_"+bind.Args[i]))
+		} else {
+			fmt.Fprintf(fp, "_%s", bind.Args[i])
+		}
 	}
 	fmt.Fprint(fp, ");\n")
 
 	if retCType != "" {
-		fmt.Fprintf(fp, "\tmemcpy(&Z_mem->data[sp], &_r, sizeof(%s));\n", retCType)
+		if retSpec.CPush != "" {
+			fmt.Fprintf(fp, "%s\n", strings.ReplaceAll(retSpec.CPush, "@", "_r"))
+		} else {
+			fmt.Fprintf(fp, "\tmemcpy(&Z_mem->data[sp], &_r, sizeof(%s));\n", retCType)
+		}
 	}
 
 	if bind.CSuffix != "" {

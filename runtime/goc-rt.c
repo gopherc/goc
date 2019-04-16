@@ -260,7 +260,7 @@ IMPL(Z_goZ_syscallZ2EopenFileZ_vi) {
     int32_t mode = LOAD(sp+20, int32_t);
     int32_t perm = LOAD(sp+24, int32_t);
 
-    char *tmp = GOC_ALLOC((size_t)len+1, 1);
+    char *tmp = GOC_ALLOC(NULL, (size_t)len+1);
     memcpy(tmp, (void*)ptr, len);
     tmp[len] = 0;
 
