@@ -253,12 +253,12 @@ func generateGoTrampoline(fpc io.Writer, pkgPath, path string, bindings map[stri
 
 		fmt.Fprintf(fpg, "func goc%s(", funcName)
 
-		writeArgs := func(prefix string, internal bool) {
-			for i := 0; i < len(bind.Args); i += 2 {
+		writeArgs := func(prefix string, start int, internal bool) {
+			for i := start; i < len(bind.Args); i += 2 {
 				name := bind.Args[i]
 				ty := bind.Args[i+1]
 
-				if i > 0 {
+				if i > start {
 					fmt.Fprint(fpg, ", ")
 				}
 
@@ -279,7 +279,7 @@ func generateGoTrampoline(fpc io.Writer, pkgPath, path string, bindings map[stri
 			}
 		}
 
-		writeArgs("", true)
+		writeArgs("", 0, true)
 		fmt.Fprint(fpg, ")")
 
 		if bind.Ret != "" {
@@ -297,8 +297,20 @@ func generateGoTrampoline(fpc io.Writer, pkgPath, path string, bindings map[stri
 			fmt.Fprintf(fpg, "// %s\n", bind.Comment)
 		}
 
-		fmt.Fprintf(fpg, "func %s(", funcName)
-		writeArgs("", false)
+		if bind.Member {
+			if len(bind.Args) < 2 {
+				fmt.Fprintf(os.Stderr, "%s has no arguments\n", fullFuncName)
+			}
+
+			fullName := createTypePath(pkgPath, bind.Args[1])
+			typeSpec := allTypes[fullName]
+			fmt.Fprintf(fpg, "func (%s %s) %s(", bind.Args[0], typeSpec.GoType, funcName)
+
+			writeArgs("", 2, false)
+		}else {
+			fmt.Fprintf(fpg, "func %s(", funcName)
+			writeArgs("", 0, false)
+		}		
 
 		if bind.Ret != "" {
 			fullName := createTypePath(pkgPath, bind.Ret)
@@ -328,7 +340,7 @@ func generateGoTrampoline(fpc io.Writer, pkgPath, path string, bindings map[stri
 			fmt.Fprintf(fpg, "\tgoc%s(", funcName)
 		}
 
-		writeArgs("_", false)
+		writeArgs("_", 0, false)
 		fmt.Fprint(fpg, ")\n")
 
 		if bind.Ret != "" {
@@ -385,7 +397,8 @@ func generateCTrampoline(fp io.Writer, pkgPath, funcName string, bind FuncBindin
 		fmt.Fprint(fp, ");\n")
 	}
 
-	mangledName := mangleCName(filepath.Join(moduleName, pkgPath), "goc"+funcName)
+	//mangledName := mangleCName(filepath.Join(moduleName, pkgPath), "goc"+funcName)
+	mangledName := mangleCName(pkgPath, "goc"+funcName)
 	fmt.Fprintf(fp, "static void _%s(uint32_t sp) {\n", mangledName)
 
 	if bind.CPrefix != "" {
