@@ -28,7 +28,10 @@ type FuncBinding struct {
 	Args             []string
 	Ret              string
 	CPrefix, CSuffix string
-	Extern, Member   bool
+
+	Extern,
+	Member,
+	BindOnly bool
 }
 
 var allTypes = map[string]TypeSpec{}
@@ -293,71 +296,73 @@ func generateGoTrampoline(fpc io.Writer, pkgPath, path string, bindings map[stri
 			fmt.Fprint(fpg, "\n\n")
 		}
 
-		if bind.Comment != "" {
-			fmt.Fprintf(fpg, "// %s\n", bind.Comment)
-		}
-
-		if bind.Member {
-			if len(bind.Args) < 2 {
-				fmt.Fprintf(os.Stderr, "%s has no arguments\n", fullFuncName)
+		if !bind.BindOnly {
+			if bind.Comment != "" {
+				fmt.Fprintf(fpg, "// %s\n", bind.Comment)
 			}
 
-			fullName := createTypePath(pkgPath, bind.Args[1])
-			typeSpec := allTypes[fullName]
-			fmt.Fprintf(fpg, "func (%s %s) %s(", bind.Args[0], typeSpec.GoType, funcName)
+			if bind.Member {
+				if len(bind.Args) < 2 {
+					fmt.Fprintf(os.Stderr, "%s has no arguments\n", fullFuncName)
+				}
 
-			writeArgs("", 2, false)
-		}else {
-			fmt.Fprintf(fpg, "func %s(", funcName)
-			writeArgs("", 0, false)
-		}		
+				fullName := createTypePath(pkgPath, bind.Args[1])
+				typeSpec := allTypes[fullName]
+				fmt.Fprintf(fpg, "func (%s %s) %s(", bind.Args[0], typeSpec.GoType, funcName)
 
-		if bind.Ret != "" {
-			fullName := createTypePath(pkgPath, bind.Ret)
-			typeSpec := allTypes[fullName]
-			fmt.Fprintf(fpg, ") %s {\n", filepath.Base(typeSpec.GoType))
-		} else {
-			fmt.Fprint(fpg, ") {\n")
-		}
-
-		for i := 0; i < len(bind.Args); i += 2 {
-			name := bind.Args[i]
-			ty := bind.Args[i+1]
-
-			fullName := createTypePath(pkgPath, ty)
-			typeSpec := allTypes[fullName]
-
-			conv := strings.ReplaceAll(typeSpec.Conversion, "@", name)
-			if conv == "" {
-				conv = name
-			}
-			fmt.Fprintf(fpg, "\t_%s := %s\n", name, conv)
-		}
-
-		if bind.Ret != "" {
-			fmt.Fprintf(fpg, "\t_r := goc%s(", funcName)
-		} else {
-			fmt.Fprintf(fpg, "\tgoc%s(", funcName)
-		}
-
-		writeArgs("_", 0, false)
-		fmt.Fprint(fpg, ")\n")
-
-		if bind.Ret != "" {
-			fullName := createTypePath(pkgPath, bind.Ret)
-			typeSpec, ok := allTypes[fullName]
-			if !ok {
-				fmt.Fprintf(os.Stderr, "%s has invalid return argument type: %s\n", fullFuncName, fullName)
-			}
-
-			if typeSpec.Conversion == "" {
-				fmt.Fprintf(fpg, "\treturn _r\n")
+				writeArgs("", 2, false)
 			} else {
-				fmt.Fprintf(fpg, "\treturn %s\n", strings.ReplaceAll(typeSpec.Conversion, "@", "_r"))
+				fmt.Fprintf(fpg, "func %s(", funcName)
+				writeArgs("", 0, false)
 			}
-		}
 
-		fmt.Fprint(fpg, "}\n\n")
+			if bind.Ret != "" {
+				fullName := createTypePath(pkgPath, bind.Ret)
+				typeSpec := allTypes[fullName]
+				fmt.Fprintf(fpg, ") %s {\n", filepath.Base(typeSpec.GoType))
+			} else {
+				fmt.Fprint(fpg, ") {\n")
+			}
+
+			for i := 0; i < len(bind.Args); i += 2 {
+				name := bind.Args[i]
+				ty := bind.Args[i+1]
+
+				fullName := createTypePath(pkgPath, ty)
+				typeSpec := allTypes[fullName]
+
+				conv := strings.ReplaceAll(typeSpec.Conversion, "@", name)
+				if conv == "" {
+					conv = name
+				}
+				fmt.Fprintf(fpg, "\t_%s := %s\n", name, conv)
+			}
+
+			if bind.Ret != "" {
+				fmt.Fprintf(fpg, "\t_r := goc%s(", funcName)
+			} else {
+				fmt.Fprintf(fpg, "\tgoc%s(", funcName)
+			}
+
+			writeArgs("_", 0, false)
+			fmt.Fprint(fpg, ")\n")
+
+			if bind.Ret != "" {
+				fullName := createTypePath(pkgPath, bind.Ret)
+				typeSpec, ok := allTypes[fullName]
+				if !ok {
+					fmt.Fprintf(os.Stderr, "%s has invalid return argument type: %s\n", fullFuncName, fullName)
+				}
+
+				if typeSpec.Conversion == "" {
+					fmt.Fprintf(fpg, "\treturn _r\n")
+				} else {
+					fmt.Fprintf(fpg, "\treturn %s\n", strings.ReplaceAll(typeSpec.Conversion, "@", "_r"))
+				}
+			}
+
+			fmt.Fprint(fpg, "}\n\n")
+		}
 
 		if err := generateCTrampoline(fpc, pkgPath, funcName, bind); err != nil {
 			return err
