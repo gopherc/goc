@@ -91,6 +91,8 @@ func Generate(projectPath, outputFile string) error {
 
 				var types map[string]TypeSpec
 				dec := json.NewDecoder(fp)
+
+				logvln("Decode:", path)
 				if err := dec.Decode(&types); err != nil {
 					return err
 				}
@@ -172,6 +174,8 @@ func Generate(projectPath, outputFile string) error {
 
 				var bindings map[string]FuncBinding
 				dec := json.NewDecoder(fp)
+
+				logvln("Decode:", path)
 				if err := dec.Decode(&bindings); err != nil {
 					return err
 				}
