@@ -19,6 +19,7 @@ type TypeSpec struct {
 	GoType, InternalGoType, CType string
 	Conversion                    string
 	CRef, CPush                   string
+	SkipImport                    bool
 	GoImports, CDeclarations      []string
 }
 
@@ -105,6 +106,9 @@ func Generate(projectPath, outputFile string) error {
 					cleanName := filepath.Join(pkgPath, name)
 					if strings.HasPrefix(name, ".") {
 						cleanName = strings.TrimPrefix(name, ".")
+					} else if !ty.SkipImport {
+						imp := strings.ReplaceAll(pkgPath, "\\", "/")
+						ty.GoImports = append(ty.GoImports, imp)
 					}
 
 					cleanName = strings.ReplaceAll(cleanName, "\\", "/")
