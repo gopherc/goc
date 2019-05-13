@@ -18,6 +18,7 @@ import (
 type TypeSpec struct {
 	GoType, InternalGoType, CType string
 	Conversion                    string
+	Align	                      string
 	CRef, CPush                   string
 	SkipImport                    bool
 	GoImports, CDeclarations      []string
@@ -103,6 +104,10 @@ func Generate(projectPath, outputFile string) error {
 					}
 					for _, dec := range ty.CDeclarations {
 						cDeclarations = append(cDeclarations, dec)
+					}
+
+					if ty.Align == "" {
+						ty.Align = fmt.Sprintf("sizeof(%s)", ty.CType)
 					}
 
 					cleanName := filepath.Join(pkgPath, name)
@@ -433,7 +438,6 @@ func generateCTrampoline(fp io.Writer, pkgPath, funcName string, bind FuncBindin
 		fmt.Fprint(fp, ");\n")
 	}
 
-	//mangledName := mangleCName(filepath.Join(moduleName, pkgPath), "goc"+funcName)
 	mangledName := mangleCName(pkgPath, "goc"+funcName)
 	fmt.Fprintf(fp, "static void _%s(uint32_t sp) {\n", mangledName)
 
@@ -449,8 +453,9 @@ func generateCTrampoline(fp io.Writer, pkgPath, funcName string, bind FuncBindin
 		fullName := createTypePath(pkgPath, ty)
 		typeSpec := allTypes[fullName]
 
+		fmt.Fprintf(fp, "\tsp = (sp + (%s - 1)) & -%s;\n", typeSpec.Align, typeSpec.Align)
 		fmt.Fprintf(fp, "\t%s _%s = *(%s*)&Z_mem->data[sp];\n", typeSpec.CType, name, typeSpec.CType)
-		fmt.Fprintf(fp, "\tsp += sizeof(%s) + ((8 - (sizeof(%s) %% 8)) %% 8);\n", typeSpec.CType, typeSpec.CType)
+		fmt.Fprintf(fp, "\tsp += sizeof(%s);\n", typeSpec.CType)
 	}
 
 	if retCType != "" {
@@ -475,6 +480,7 @@ func generateCTrampoline(fp io.Writer, pkgPath, funcName string, bind FuncBindin
 	fmt.Fprint(fp, ");\n")
 
 	if retCType != "" {
+		fmt.Fprint(fp, "\tsp = (sp + (8 - 1)) & -8;\n")
 		if retSpec.CPush != "" {
 			fmt.Fprintf(fp, "%s\n", strings.ReplaceAll(retSpec.CPush, "@", "_r"))
 		} else {

@@ -17,6 +17,12 @@ extern "C" {
     extern char **environ;
 #endif
 
+#ifdef _MSC_VER
+    #define EXPORT __declspec(dllexport)
+#else
+    #define EXPORT
+#endif
+
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -363,7 +369,7 @@ extern void init();
 
 int pointerOffsets[MAX_ARGC] = {0};
 
-int GOC_ENTRY(int argc, char *argv[]) {
+EXPORT int GOC_ENTRY(int argc, char *argv[]) {
     if (argc > MAX_ARGC)
         argc = MAX_ARGC;
 
