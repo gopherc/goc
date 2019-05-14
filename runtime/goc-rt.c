@@ -33,6 +33,11 @@ extern "C" {
 
 #include <wasm-rt.h>
 
+#ifndef GOC_FWRITE
+    #define GOC_FWRITE fwrite
+#endif
+extern size_t GOC_FWRITE(const void*, size_t, size_t, FILE*);
+
 #ifndef GOC_ALLOC
     #define GOC_ALLOC realloc
 #endif
@@ -85,7 +90,7 @@ static int32_t write(int32_t sp) {
     else
         return -1;
     
-    return (int32_t)fwrite(&Z_mem->data[p], 1, (size_t)n, fp);
+    return (int32_t)GOC_FWRITE(&Z_mem->data[p], 1, (size_t)n, fp);
 }
 
 uint32_t wasm_rt_call_stack_depth;
