@@ -18,8 +18,8 @@ import (
 type TypeSpec struct {
 	GoType, InternalGoType, CType string
 	Conversion                    string
-	Align	                      string
 	CRef, CPush                   string
+	Align	                      int
 	SkipImport                    bool
 	GoImports, CDeclarations      []string
 }
@@ -104,10 +104,6 @@ func Generate(projectPath, outputFile string) error {
 					}
 					for _, dec := range ty.CDeclarations {
 						cDeclarations = append(cDeclarations, dec)
-					}
-
-					if ty.Align == "" {
-						ty.Align = fmt.Sprintf("sizeof(%s)", ty.CType)
 					}
 
 					cleanName := filepath.Join(pkgPath, name)
@@ -453,7 +449,12 @@ func generateCTrampoline(fp io.Writer, pkgPath, funcName string, bind FuncBindin
 		fullName := createTypePath(pkgPath, ty)
 		typeSpec := allTypes[fullName]
 
-		fmt.Fprintf(fp, "\tsp = (sp + (%s - 1)) & -%s;\n", typeSpec.Align, typeSpec.Align)
+		align := fmt.Sprintf("sizeof(%s)", typeSpec.CType)
+		if typeSpec.Align > 0 {
+			align = fmt.Sprintf("%d", typeSpec.Align)
+		}
+
+		fmt.Fprintf(fp, "\tsp = (sp + (%s - 1)) & -%s;\n", align, align)
 		fmt.Fprintf(fp, "\t%s _%s = *(%s*)&Z_mem->data[sp];\n", typeSpec.CType, name, typeSpec.CType)
 		fmt.Fprintf(fp, "\tsp += sizeof(%s);\n", typeSpec.CType)
 	}
