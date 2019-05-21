@@ -104,7 +104,10 @@ func Build() int {
 
 	var foundHelper bool
 	if generateCBindings || foundBindings {
-		helper := filepath.Join(inputPath, "helper_goc.c")
+		if helperPath == "" {
+			helperPath = inputPath
+		}
+		helper := filepath.Join(helperPath, "helper_goc.c")
 		if _, err := os.Stat(helper); !os.IsNotExist(err) {
 			logvln("Found C binding helper:", helper)
 			cFiles = append(cFiles, helper)
@@ -269,6 +272,7 @@ var (
 	runtimePath,
 	goRoot,
 	workPath,
+	helperPath,
 	cFlags,
 	buildTags string
 )
@@ -298,6 +302,7 @@ func setupFlags() {
 	flag.StringVar(&outputName, "o", outputName, "final output name")
 	flag.StringVar(&entryName, "entry", entryName, "name of C entry point")
 	flag.StringVar(&workPath, "work", workPath, "specify temporary work path")
+	flag.StringVar(&helperPath, "helper", helperPath, "specify C helper path")
 	flag.StringVar(&cFlags, "cflags", cFlags, "extra parameters for the C compiler")
 	flag.StringVar(&buildmode, "buildmode", buildmode, "set compiler buildmode, 'exe', 'shared' or 'c-source'")
 	flag.BoolVar(&generateCBindings, "b", generateCBindings, "generate C bindings")
