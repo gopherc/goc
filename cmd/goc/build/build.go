@@ -49,7 +49,7 @@ func Build() int {
 	if len(buildTags) > 0 && !strings.HasPrefix(buildTags, " ") {
 		buildTags = " " + buildTags
 	}
-	args = append(args, "-tags", "\"goc"+buildTags+"\"")
+	args = append(args, "-tags", "goc"+buildTags)
 
 	inputFile, _ := filepath.Abs(inputFiles[0])
 	inputPath := filepath.Dir(inputFile)
